@@ -709,7 +709,7 @@
       for (let i = 0; i < slugs.length; i += 100) {
         const batch = slugs.slice(i, i + 100);
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/card_prices?scarcity=eq.${rarity}&player_slug=in.(${batch.map(s => `"${s}"`).join(',')})&select=player_slug,fmv,floor_price,team_name,eligibility`,
+          `${SUPABASE_URL}/rest/v1/card_prices?scarcity=eq.${rarity}&player_slug=in.(${batch.map(s => `"${s}"`).join(',')})&select=player_slug,fmv,floor_price,team_name,eligibility,sale_1`,
           { headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY } }
         );
         const data = await res.json();
@@ -778,7 +778,9 @@
           <div class="card-team">${esc(team)} · ${seasonTag}</div>
           ${fmv
             ? `<div class="card-fmv">€${fmv.toFixed(2)}</div>`
-            : `<div class="card-fmv no-data">// no data</div>`
+            : (fmvData?.floor_price ?? fmvData?.sale_1)
+              ? `<div class="card-fmv" style="opacity:.7">~€${(fmvData.floor_price ?? fmvData.sale_1).toFixed(2)}</div>`
+              : `<div class="card-fmv no-data">// no data</div>`
           }
         </div>
       </div>`;
@@ -799,7 +801,8 @@
     for (const c of allCards) {
       const rarity  = c.rarityTyped?.toLowerCase() || 'limited';
       const fmvData = fmvCache[`${c.player?.slug}_${rarity}_${eligOf(c)}`];
-      if (fmvData?.fmv) total += fmvData.fmv;
+      const v = fmvData?.fmv ?? fmvData?.floor_price ?? fmvData?.sale_1;
+      if (v) total += v;
     }
 
     document.getElementById('stat-value').textContent =
