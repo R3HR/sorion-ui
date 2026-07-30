@@ -4,11 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SORION — Impressum & Datenschutz</title>
-<!-- Privacy-friendly analytics by Plausible -->
-<script async src="https://plausible.io/js/pa-H3tHJiKjs3uv9_v92tzER.js"></script>
+<!-- Eigenes, cookiefreies Analytics (self-hosted in Supabase) -->
 <script>
-  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
-  plausible.init()
+(function(){
+  var URL_='https://jxhdlcpdupmkpsoytzes.supabase.co/functions/v1/track', SITE='sorion';
+  window.track=function(ev){
+    try{
+      fetch(URL_,{method:'POST',keepalive:true,
+        headers:{'Content-Type':'application/json','apikey':'sb_publishable_cplVdUDlMw1S5IcjlwxPTA_Mx8G7016'},
+        body:JSON.stringify({site:SITE,path:location.pathname,event:ev||'pageview',ref:document.referrer||null})
+      }).catch(function(){});
+    }catch(e){}
+  };
+  window.track();
+})();
 </script>
 <link href="fonts/fonts.css" rel="stylesheet">
 <style>

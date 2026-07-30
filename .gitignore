@@ -1,2 +1,5 @@
 node_modules/
 _archive/
+
+# Admin-Dashboard: darf NICHT oeffentlich werden (liegt im privaten Repo Sorion_pro/UI/)
+stats.html

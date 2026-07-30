@@ -4,11 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SORION — Sorare Market Intelligence</title>
-<!-- Privacy-friendly analytics by Plausible -->
-<script async src="https://plausible.io/js/pa-H3tHJiKjs3uv9_v92tzER.js"></script>
+<!-- Eigenes, cookiefreies Analytics (self-hosted in Supabase) -->
 <script>
-  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
-  plausible.init()
+(function(){
+  var URL_='https://jxhdlcpdupmkpsoytzes.supabase.co/functions/v1/track', SITE='sorion';
+  window.track=function(ev){
+    try{
+      fetch(URL_,{method:'POST',keepalive:true,
+        headers:{'Content-Type':'application/json','apikey':'sb_publishable_cplVdUDlMw1S5IcjlwxPTA_Mx8G7016'},
+        body:JSON.stringify({site:SITE,path:location.pathname,event:ev||'pageview',ref:document.referrer||null})
+      }).catch(function(){});
+    }catch(e){}
+  };
+  window.track();
+})();
 </script>
 <link href="fonts/fonts.css" rel="stylesheet">
 <style>
@@ -1310,6 +1319,7 @@
   function rowElig(r) { return r.eligibility ?? 'in_season'; }
 
   function setEligibility(e) {
+    if (window.track) track('elig_toggle');
     eligFilter = e;
     document.getElementById('btn-inseason').classList.toggle('active', e === 'in_season');
     document.getElementById('btn-classic').classList.toggle('active', e === 'classic');
@@ -1439,6 +1449,7 @@
   }
 
   function setScarcity(sc) {
+    if (window.track) track('scarcity_switch');
     scarcityFilter = sc;
     ['ltd','rar','sr','all'].forEach(k => document.getElementById('btn-'+k).classList.remove('active'));
     const map = {limited:'ltd',rare:'rar',super_rare:'sr',all:'all'};
@@ -1952,6 +1963,7 @@
   }
 
   async function msFetchManager(slug, onProgress) {
+    if (window.track) track('manager_search');
     try {
       const c = JSON.parse(sessionStorage.getItem('sorion_ms_cache'));
       if (c && c.slug === slug && Date.now() - c.ts < 10 * 60 * 1000) return c;
