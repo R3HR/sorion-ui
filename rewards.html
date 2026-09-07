@@ -125,7 +125,7 @@
   }
   .logo { display: flex; align-items: center; gap: 14px; text-decoration: none; }
   .logo-mark {
-    font-family: 'Orbitron', monospace; font-size: 30px; font-weight: 900;
+    font-family: 'Orbitron', monospace; font-size: 38px; font-weight: 900;
     letter-spacing: 4px; color: var(--text); text-shadow: 0 0 20px rgba(176,96,255,0.5);
   }
   .logo-cursor { color: var(--purple); animation: logoblink 1.2s steps(2) infinite; }
@@ -160,10 +160,13 @@
   }
   .nav-cta:hover { background: var(--purple); color: var(--bg); box-shadow: 0 0 20px var(--purple); }
   @media (max-width: 720px) {
-    .logo-mark { font-size: 24px; }
+    .logo-mark { font-size: 20px; letter-spacing: 2px; }
     .logo-sub { display: none; }
     .nav-links { gap: 14px; }
     header { padding: 16px 0; margin-bottom: 22px; }
+  }
+  @media (max-width: 480px) {
+    .logo-mark { font-size: 18px; }
   }
 </style>
 </head>
@@ -209,7 +212,7 @@
 
   <div class="upsell" id="upsell" style="display:none">
     <b>Cash thresholds are a Pro feature.</b><br>
-    The exact score you need to finish in the money is unlocked for Pro supporters. Everything else
+    <b id="upsell-sample"></b>The exact score you need to finish in the money is unlocked for Pro supporters. Everything else
     on this page stays free: essence thresholds, paid ranks, top scores and lineup counts.
     <a href="https://ko-fi.com/X5L225H2O9" target="_blank" rel="noopener">Become a Pro supporter on Ko-fi</a>,
     then sign in with the same account.
@@ -261,6 +264,9 @@
   const KEY  = 'sb_publishable_cplVdUDlMw1S5IcjlwxPTA_Mx8G7016';
   let rows = [], rarity = 'limited', sortKey = 'cash', sortDir = -1;
   let cashLocked = false;          // vom Server: hat dieses Konto das Pro-Feature?
+  // Ein Wettbewerb bleibt als Kostprobe offen (Server entscheidet, Spalte cash_locked
+  // kommt je Zeile). Die Seite blurrt deshalb zeilenweise, nicht die ganze Spalte.
+  let previewComp = null;
   let staleSession = false;        // Token abgelaufen -> nur freie Ansicht moeglich
   // Session teilen wir mit Portfolio/Profil (localStorage 'sorion_session')
   const session = () => { try { return JSON.parse(localStorage.getItem('sorion_session') || 'null'); } catch { return null; } };
@@ -299,10 +305,10 @@
   function sortBy(k) { if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = k === 'comp' ? 1 : -1; } render(); }
 
   // Verlauf der Cash-Schwelle ueber die Spieltage als Mini-SVG
-  function spark(vals) {
+  function spark(vals, locked) {
     // Gesperrt: der Verlauf gehoert zu den Cash-Daten, also ebenfalls Platzhalter.
     // Eine Spalte voller Striche saehe nach Fehler aus, nicht nach Schloss.
-    if (cashLocked) return '<span class="lockv">\u2581\u2583\u2582\u2585\u2583\u2586</span>';
+    if (locked) return '<span class="lockv">\u2581\u2583\u2582\u2585\u2583\u2586</span>';
     const v = vals.filter(x => x != null);
     if (v.length < 2) return '<span class="rng">—</span>';
     const W = 90, H = 22, min = Math.min(...v), max = Math.max(...v), r = max - min || 1;
@@ -332,6 +338,7 @@
         essCost:  avg(rs.map(r => r.essence_cost).filter(x => x != null).map(Number)),
         lineups: avg(rs.map(r => r.lineups).filter(x => x != null)),
         cashSeries: rs.map(r => r.cash_score == null ? null : Number(r.cash_score)),
+        locked: !!rs[0].cash_locked,
       };
     });
   }
@@ -361,19 +368,21 @@
       <td class="num">${a.essRank != null ? 'top ' + n0(a.essRank) : '—'}</td>
       <td class="num">${n0(a.top)}</td>
       <td class="num">${n0(a.lineups)}</td>
-      <td>${spark(a.cashSeries)}</td></tr>`).join('');
+      <td>${spark(a.cashSeries, a.locked)}</td></tr>`).join('');
 
     // Kopfzahlen: leichtester / haertester Cash-Einstieg dieser Rarity
     const withCash = agg.filter(a => a.cash != null).sort((a, b) => a.cash - b.cash);
     const gwCount = new Set(rows.filter(r => r.rarity === rarity).map(r => r.fixture_slug)).size;
     const payers = agg.filter(a => a.cashRank != null).length;   // Raenge sind frei -> zaehlbar
     const withEss = agg.filter(a => a.ess != null).sort((a, b) => a.ess - b.ess);
+    previewComp = agg.find(a => !a.locked) || null;
     if (cashLocked) {
       document.getElementById('kpis').innerHTML = `
         <div class="kpi"><small>Gameweeks covered</small><b>${gwCount}</b></div>
         <div class="kpi"><small>Competitions paying cash</small><b>${payers}</b></div>
         ${withEss.length ? `<div class="kpi"><small>Easiest essence entry</small><b class="ess">${n0(withEss[0].ess)} pts</b><span class="mono" style="font-size:10px;color:var(--dim)">${esc(withEss[0].comp)}</span></div>` : ''}
-        <div class="kpi"><small>Cash thresholds</small><b class="cash"><span class="lockv">000</span> 🔒</b><span class="mono" style="font-size:10px;color:var(--dim)">Pro feature</span></div>`;
+        ${previewComp ? `<div class="kpi"><small>Free sample</small><b class="cash">${previewComp.cash != null ? n0(previewComp.cash) + ' pts' : '—'}</b><span class="mono" style="font-size:10px;color:var(--dim)">${esc(previewComp.comp)} · open to everyone</span></div>`
+                       : `<div class="kpi"><small>Cash thresholds</small><b class="cash"><span class="lockv">000</span> 🔒</b><span class="mono" style="font-size:10px;color:var(--dim)">Pro feature</span></div>`}`;
       return;
     }
     document.getElementById('kpis').innerHTML = withCash.length ? `
@@ -399,14 +408,14 @@
       if (res.ok) {
         rows = await res.json();
       } else {
-        // Rueckfall, solange die Gate-Migration noch nicht eingespielt ist:
-        // direkte Tabellenlesung (danach entzogen, dann greift nur noch die RPC).
-        const alt = await fetch(`${BASE}/reward_thresholds?select=fixture_slug,fixture_name,start_date,competition,rarity,lineups,top_score,cash_rank,cash_score,essence_rank,essence_score&order=start_date.asc&limit=1000`,
-          { headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY } });
-        if (!alt.ok) throw new Error(alt.status);
-        rows = await alt.json();
+        // Kein Rueckfall auf die Tabelle: die RPC ist die einzige Quelle, weil nur
+        // sie das Cash-Gate anwendet. Lieber leer als ungeprueft.
+        throw new Error(res.status);
       }
-      cashLocked = rows.length ? !!rows[0].cash_locked : false;
+      cashLocked = rows.length ? rows.some(r => r.cash_locked) : false;
+      const openComp = rows.find(r => !r.cash_locked);
+      const smp = document.getElementById('upsell-sample');
+      if (smp && cashLocked && openComp) smp.innerHTML = `${esc(openComp.competition)} is open as a free sample. `;
       document.getElementById('upsell').style.display = cashLocked ? '' : 'none';
       if (staleSession) {
         const u = document.getElementById('upsell');

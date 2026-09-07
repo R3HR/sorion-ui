@@ -31,7 +31,10 @@
   .wrap { max-width: 640px; margin: 0 auto; padding: 32px 20px 80px; }
   a { color: var(--purple); }
   header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; flex-wrap: wrap; gap: 10px; }
-  .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 20px; text-decoration: none; color: var(--text); }
+  .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 38px; letter-spacing: 4px;
+    text-decoration: none; color: var(--text); text-shadow: 0 0 20px rgba(176,96,255,0.5); }
+  @media (max-width: 720px) { .logo { font-size: 20px; letter-spacing: 2px; } }
+  @media (max-width: 480px) { .logo { font-size: 18px; } }
   .logo span { color: var(--purple); }
   .logo-cursor { animation: logoblink 1.2s steps(2) infinite; }
   @keyframes logoblink { 50% { opacity: 0; } }

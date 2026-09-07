@@ -104,7 +104,7 @@
   }
   .logo { display: flex; align-items: center; gap: 14px; text-decoration: none; }
   .logo-mark {
-    font-family: 'Orbitron', monospace; font-size: 30px; font-weight: 900;
+    font-family: 'Orbitron', monospace; font-size: 38px; font-weight: 900;
     letter-spacing: 4px; color: var(--text); text-shadow: 0 0 20px rgba(176,96,255,0.5);
   }
   .logo-cursor { color: var(--purple); animation: logoblink 1.2s steps(2) infinite; }
@@ -139,10 +139,13 @@
   }
   .nav-cta:hover { background: var(--purple); color: var(--bg); box-shadow: 0 0 20px var(--purple); }
   @media (max-width: 720px) {
-    .logo-mark { font-size: 24px; }
+    .logo-mark { font-size: 20px; letter-spacing: 2px; }
     .logo-sub { display: none; }
     .nav-links { gap: 14px; }
     header { padding: 16px 0; margin-bottom: 22px; }
+  }
+  @media (max-width: 480px) {
+    .logo-mark { font-size: 18px; }
   }
 </style>
 </head>
