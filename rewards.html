@@ -338,7 +338,7 @@
         essCost:  avg(rs.map(r => r.essence_cost).filter(x => x != null).map(Number)),
         lineups: avg(rs.map(r => r.lineups).filter(x => x != null)),
         cashSeries: rs.map(r => r.cash_score == null ? null : Number(r.cash_score)),
-        locked: !!rs[0].cash_locked,
+        locked: rs.some(r => r.cash_locked),
       };
     });
   }
@@ -358,10 +358,11 @@
       <td class="num">${a.gws}</td>
       <td class="num cash">${a.locked
           ? '<span class="lockv">000</span><span class="lock-ico">🔒</span>'
-          : n0(a.cash) + (a.cash != null && a.gws > 1 ? ` <span class="rng">(${n0(a.cashMin)}–${n0(a.cashMax)})</span>` : '')}</td>
+          : a.cash == null ? '<span class="rng">no cash</span>'
+          : n0(a.cash) + (a.gws > 1 ? ` <span class="rng">(${n0(a.cashMin)}–${n0(a.cashMax)})</span>` : '')}</td>
       <td class="num cash">${a.locked
           ? '<span class="lockv">000</span><span class="lock-ico">\uD83D\uDD12</span>'
-          : eur(a.cashCost)}</td>
+          : a.cashCost == null ? '<span class="rng">no cash</span>' : eur(a.cashCost)}</td>
       <td class="num">${a.cashRank != null ? 'top ' + n0(a.cashRank) : '—'}</td>
       <td class="num ess">${n0(a.ess)}${a.ess != null && a.gws > 1 ? ` <span class="rng">(${n0(a.essMin)}–${n0(a.essMax)})</span>` : ''}</td>
       <td class="num ess">${eur(a.essCost)}</td>
@@ -375,7 +376,7 @@
     const gwCount = new Set(rows.filter(r => r.rarity === rarity).map(r => r.fixture_slug)).size;
     const payers = agg.filter(a => a.cashRank != null).length;   // Raenge sind frei -> zaehlbar
     const withEss = agg.filter(a => a.ess != null).sort((a, b) => a.ess - b.ess);
-    previewComp = agg.find(a => !a.locked) || null;
+    previewComp = agg.find(a => !a.locked && a.cash != null) || null;
     if (cashLocked) {
       document.getElementById('kpis').innerHTML = `
         <div class="kpi"><small>Gameweeks covered</small><b>${gwCount}</b></div>
@@ -413,7 +414,7 @@
         throw new Error(res.status);
       }
       cashLocked = rows.length ? rows.some(r => r.cash_locked) : false;
-      const openComp = rows.find(r => !r.cash_locked);
+      const openComp = rows.find(r => !r.cash_locked && r.cash_score != null);
       const smp = document.getElementById('upsell-sample');
       if (smp && cashLocked && openComp) smp.innerHTML = `${esc(openComp.competition)} is open as a free sample. `;
       document.getElementById('upsell').style.display = cashLocked ? '' : 'none';
