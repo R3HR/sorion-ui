@@ -628,6 +628,11 @@
   .pm-earn-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
                  padding: 12px 14px; }
   .pm-earn-row { font-family: 'Share Tech Mono', monospace; font-size: 14px; padding: 4px 0; }
+  /* Gesperrte Werte: der Platzhalter ist ERFUNDEN, nie der echte Wert — der
+     verlaesst den Server ohne Pro-Stufe gar nicht (Grundregel Pro-Features). */
+  .lockv { filter: blur(4px); user-select: none; color: var(--up); opacity: .75; }
+  .earn-upsell { color: #b060ff; text-decoration: none; border-bottom: 1px dotted #b060ff; }
+  .earn-upsell:hover { color: #c68fff; }
   .pm-earn-note { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text2);
                   opacity: .75; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 
@@ -1632,12 +1637,54 @@
   // mit den Preis-Updatern, deshalb sequenziell mit Pause.
   const earnByCard = new Map();
   const earnState = { gws: 0, running: false, done: false };
+  let earnLocked = false;        // Pro-Feature 'portfolio_earnings', der Server entscheidet
   let essRate = null;
 
   const rpcJson = (name, body) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: 'POST', headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+  // Gueltiges Sitzungs-Token holen, notfalls erneuern. OHNE das beantwortet der
+  // Server has_feature() mit false und ein zahlendes Pro-Konto saehe seine
+  // Ertraege nicht (Falle vom 06.09.: abgelaufenes Token -> 401 -> leere Seite).
+  // Gibt null zurueck, wenn niemand angemeldet ist; dann wird anonym gefragt.
+  async function authToken() {
+    let sess = null;
+    try { sess = JSON.parse(localStorage.getItem('sorion_session') || 'null'); } catch {}
+    if (!sess?.access_token) return null;
+    try {
+      const exp = JSON.parse(atob(sess.access_token.split('.')[1])).exp * 1000;
+      if (Date.now() < exp - 30000) return sess.access_token;
+    } catch { return sess.access_token; }        // kein lesbares exp: einfach versuchen
+    if (!sess.refresh_token) return null;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST', headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: sess.refresh_token }),
+      });
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (!d?.access_token) return null;
+      localStorage.setItem('sorion_session', JSON.stringify({ ...sess, ...d }));
+      return d.access_token;
+    } catch { return null; }
+  }
+
+  // Wie rpcJson, aber angemeldet — noetig fuer alles, was an eine Stufe gebunden
+  // ist (Pro-Features). Ohne Token wird bewusst anonym gefragt, damit die Seite
+  // fuer Gaeste weiter antwortet statt 401 zu kassieren.
+  async function rpcAuth(name, body) {
+    const tok = await authToken();
+    const headers = { 'apikey': ANON_KEY, 'Content-Type': 'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+        method: 'POST', headers, body: JSON.stringify(body),
+      });
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  }
 
   const so5 = body => fetch(`${SUPABASE_URL}/functions/v1/so5-results`, {
     method: 'POST', headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
@@ -1673,8 +1720,22 @@
     if (earnState.running || !slug) return;
     earnState.running = true;
 
+    // Pro-Feature (feature_access: portfolio_earnings). Der Server entscheidet;
+    // die RPC liefert einem Nicht-Pro ohnehin keine Zeilen. Gefragt wird hier nur,
+    // um den Hinweis zu zeigen — und um bei gesperrtem Zugang das Nachladen der
+    // Spieltage zu sparen (sonst ~100 Aufrufe auf dem geteilten API-Kontingent).
+    earnLocked = (await rpcAuth('has_feature', { p_feature: 'portfolio_earnings' })) !== true;
+    if (earnLocked) {
+      earnState.running = false;
+      earnState.done = true;
+      updateEarnStats();
+      const pmBox = document.getElementById('pm-earn');
+      if (pmBox) pmBox.innerHTML = renderCardEarnings(null);   // gesperrt: Slug egal
+      return;
+    }
+
     essRate = await rpcJson('essence_value', {});
-    const stored = await rpcJson('so5_earnings_by_card', { p_manager: slug });
+    const stored = await rpcAuth('so5_earnings_by_card', { p_manager: slug });
     if (Array.isArray(stored)) {
       for (const r of stored) {
         earnByCard.set(r.card_slug, {
@@ -1724,6 +1785,16 @@
   function updateEarnStats() {
     const box = document.getElementById('stat-earn-box');
     if (!box) return;
+    // Gesperrt: Platzhalter statt Zahlen. Der echte Wert wurde nie geladen — ohne
+    // Pro-Stufe liefert ihn der Server gar nicht erst aus (Grundregel Pro-Features).
+    if (earnLocked) {
+      document.getElementById('stat-earn').innerHTML =
+        '<span class="lockv">&#8776;&euro;000.00</span> <span style="font-size:13px">&#128274;</span>';
+      document.getElementById('stat-earn-sub').innerHTML =
+        '<a href="#" onclick="openSupport();return false" class="earn-upsell">Pro feature: what your cards earned</a>';
+      box.style.display = '';
+      return;
+    }
     if (!earnByCard.size) { box.style.display = 'none'; return; }
     let cash = 0, xp = 0; const ess = {};
     for (const e of earnByCard.values()) {
@@ -1764,6 +1835,13 @@
     .replace(/\b\w/g, m => m.toUpperCase()).replace(/\bXp\b/, 'XP');
 
   function renderCardEarnings(cardSlug) {
+    if (earnLocked) {
+      return '<div class="pm-earn-row"><span class="lockv">&euro;0.00 prize money</span> '
+        + '<span style="font-size:13px">&#128274;</span></div>'
+        + '<div class="pm-earn-row"><span class="lockv">000 limited essence</span></div>'
+        + '<div class="pm-earn-note">// Pro feature: what this card earned in lineups &middot; '
+        + '<a href="#" onclick="openSupport();return false" class="earn-upsell">unlock</a></div>';
+    }
     const e = earnByCard.get(cardSlug);
     if (!e) return `<div class="pm-nodata">${earnState.done ? '// no lineup rewards yet' : '// loading…'}</div>`;
     const rateOf = r => essRate?.find(x => x.scarcity === r);
