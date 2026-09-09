@@ -35,6 +35,9 @@
     --bg: #0d0d1a; --surface: #13131f; --surface2: #1a1a2e; --border: #2a2a45;
     --purple: #b060ff; --text: #e8e8ff; --text2: #9090c0; --dim: #8888b4;
     --limited: #ffb830; --rare: #ff5555; --sr: #7090ff; --up: #00f5a0; --down: #ff2d78;
+    /* Geldscheingruen fuer alles, was Cash ist (Ansage Jonas 09.09.). Bewusst
+       gedeckt statt neon: --up leuchtet und ist fuer Kursbewegungen reserviert. */
+    --cash: #85bb65;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: var(--bg); color: var(--text); font-family: 'Exo 2', sans-serif; line-height: 1.7; }
@@ -77,12 +80,10 @@
   td.num { text-align: right; font-family: 'Share Tech Mono', monospace; }
   th.num { text-align: right; }
   td .rng { color: var(--dim); font-size: 10px; margin-left: 4px; }
-  /* Cash und Essence teilen sich jetzt das Lila der Seite (Ansage Jonas 09.09.).
-     Das Gruen stach heraus und passte nicht zum Rest von SORION. */
-  .cash { color: var(--purple); } .ess { color: var(--purple); }
+  .cash { color: var(--cash); } .ess { color: var(--purple); }
   /* Pro-Gate: der Wert kommt gar nicht erst vom Server (Migration
      2026-09-06_user_tiers_feature_access.sql) — hier steht nur ein Platzhalter. */
-  .lockv { filter: blur(4px); user-select: none; color: var(--purple); opacity: .75; }
+  .lockv { filter: blur(4px); user-select: none; color: var(--cash); opacity: .75; }
   .lock-ico { margin-left: 5px; opacity: .8; }
   .pro-chip { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px;
               background: rgba(176,96,255,.15); border: 1px solid var(--purple); color: var(--purple);
@@ -94,16 +95,16 @@
   /* Gutschein-Hinweis: der Grund, warum gerade niemand zahlen muss. Bewusst
      abgesetzt, damit er nicht als Fussnote im Fliesstext untergeht. */
   .voucher { margin-top: 12px; padding: 12px 14px; border-radius: 6px;
-             background: rgba(0,245,160,.08); border: 1px solid rgba(0,245,160,.45);
+             background: rgba(133,187,101,.10); border: 1px solid rgba(133,187,101,.55);
              display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .voucher b { color: var(--up); font-size: 12px; letter-spacing: .06em; }
+  .voucher b { color: var(--cash); font-size: 12px; letter-spacing: .06em; }
   .voucher span { color: var(--text2); font-size: 13px; }
   .voucher a.dc { margin-left: auto; white-space: nowrap; text-decoration: none;
                   font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700;
                   letter-spacing: .1em; text-transform: uppercase;
-                  color: #0d0d1a; background: var(--up); border-radius: 5px; padding: 9px 16px;
+                  color: #0d0d1a; background: var(--cash); border-radius: 5px; padding: 9px 16px;
                   transition: all .15s; }
-  .voucher a.dc:hover { box-shadow: 0 0 18px rgba(0,245,160,.45); transform: translateY(-1px); }
+  .voucher a.dc:hover { box-shadow: 0 0 18px rgba(133,187,101,.5); transform: translateY(-1px); }
   @media (max-width: 620px) { .voucher a.dc { margin-left: 0; } }
   .comp { font-weight: 600; }
   .spark { vertical-align: middle; }
@@ -346,7 +347,7 @@
     if (v.length < 2) return '<span class="rng">—</span>';
     const W = 90, H = 22, min = Math.min(...v), max = Math.max(...v), r = max - min || 1;
     const pts = v.map((y, i) => `${(i / (v.length - 1) * W).toFixed(1)},${(H - 3 - (y - min) / r * (H - 6)).toFixed(1)}`).join(' ');
-    return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><polyline points="${pts}" fill="none" stroke="#b060ff" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+    return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><polyline points="${pts}" fill="none" stroke="#85bb65" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
   }
 
   function aggregate() {
