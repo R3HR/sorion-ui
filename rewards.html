@@ -246,6 +246,8 @@
           <th class="num" onclick="sortBy('gws')">GWs</th>
           <th class="num sorted" onclick="sortBy('cash')">Cash from <span class="cash">pts</span><span class="pro-chip" id="cash-chip" style="display:none">PRO</span></th>
           <th class="num" onclick="sortBy('cashCost')">Cash <span class="cash">team</span></th>
+          <th class="num" onclick="sortBy('costP20')">cheapest <span class="cash">20 %</span></th>
+          <th class="num" onclick="sortBy('costMin')">cheapest <span class="cash">winner</span></th>
           <th class="num" onclick="sortBy('cashRank')">paid ranks</th>
           <th class="num" onclick="sortBy('ess')">Essence from <span class="ess">pts</span></th>
           <th class="num" onclick="sortBy('essCost')">Essence <span class="ess">team</span></th>
@@ -255,7 +257,7 @@
           <th>Cash trend</th>
         </tr>
       </thead>
-      <tbody id="tbody"><tr><td colspan="11" class="empty">// loading…</td></tr></tbody>
+      <tbody id="tbody"><tr><td colspan="13" class="empty">// loading…</td></tr></tbody>
     </table>
   </div>
 
@@ -266,6 +268,12 @@
     <li><strong>Cash team / Essence team</strong> = median cost of the lineups that actually won
         in that band, priced at today's FMV across all five cards. Only fully priced lineups count,
         so a squad with an unpriced card never drags the number down.</li>
+    <li><strong>Cheapest 20 % / cheapest winner</strong> = how cheap it got. One in five cash
+        winning lineups cost the first number or less; the second is the single cheapest lineup
+        that took money all season. Read them together: the cheapest winner shows what is
+        possible on a good weekend, the 20 % mark shows what is repeatable. Both exist only
+        for cash, where we price every single paying rank. Essence ranks run into the thousands
+        and are sampled, so a minimum there would describe our sample, not the field.</li>
     <li><strong>Squad size differs:</strong> All Star and Under 23 are played with seven cards,
         every other competition with five. Their team cost is naturally higher, so compare within
         a competition rather than across.</li>
@@ -355,6 +363,12 @@
         essRank: avg(rs.map(r => r.essence_rank).filter(x => x != null)),
         top: avg(rs.map(r => r.top_score).filter(x => x != null).map(Number)),
         cashCost: avg(rs.map(r => r.cash_cost).filter(x => x != null).map(Number)),
+        // Erst seit der Vollerhebung aller Cash-Gewinner (09.09.) ehrlich berechenbar.
+        // p20 wird ueber die Spieltage gemittelt wie die uebrigen Kennzahlen; beim Minimum
+        // waere ein Mittelwert sinnlos, gesucht ist das billigste Team ueberhaupt.
+        costP20: avg(rs.map(r => r.cash_cost_p20).filter(x => x != null).map(Number)),
+        costMin: (v => v.length ? Math.min(...v) : null)(
+                   rs.map(r => r.cash_cost_min).filter(x => x != null).map(Number)),
         essCost:  avg(rs.map(r => r.essence_cost).filter(x => x != null).map(Number)),
         lineups: avg(rs.map(r => r.lineups).filter(x => x != null)),
         cashSeries: rs.map(r => r.cash_score == null ? null : Number(r.cash_score)),
@@ -367,7 +381,7 @@
     const agg = aggregate();
     const tb = document.getElementById('tbody');
     document.querySelectorAll('thead th').forEach(th => th.classList.toggle('sorted', th.getAttribute('onclick')?.includes(`'${sortKey}'`)));
-    if (!agg.length) { tb.innerHTML = `<tr><td colspan="11" class="empty">// no closed gameweeks for this rarity yet</td></tr>`; document.getElementById('kpis').innerHTML = ''; return; }
+    if (!agg.length) { tb.innerHTML = `<tr><td colspan="13" class="empty">// no closed gameweeks for this rarity yet</td></tr>`; document.getElementById('kpis').innerHTML = ''; return; }
     agg.sort((a, b) => {
       const ka = a[sortKey], kb = b[sortKey];
       if (ka == null && kb == null) return 0; if (ka == null) return 1; if (kb == null) return -1;
@@ -383,6 +397,12 @@
       <td class="num cash">${a.locked
           ? '<span class="lockv">000</span><span class="lock-ico">\uD83D\uDD12</span>'
           : a.cashCost == null ? '<span class="rng">no cash</span>' : eur(a.cashCost)}</td>
+      <td class="num cash">${a.locked
+          ? '<span class="lockv">000</span><span class="lock-ico">🔒</span>'
+          : a.costP20 == null ? '<span class="rng">no cash</span>' : eur(a.costP20)}</td>
+      <td class="num cash">${a.locked
+          ? '<span class="lockv">000</span><span class="lock-ico">🔒</span>'
+          : a.costMin == null ? '<span class="rng">no cash</span>' : eur(a.costMin)}</td>
       <td class="num">${a.cashRank != null ? 'top ' + n0(a.cashRank) : '—'}</td>
       <td class="num ess">${n0(a.ess)}${a.ess != null && a.gws > 1 ? ` <span class="rng">(${n0(a.essMin)}–${n0(a.essMax)})</span>` : ''}</td>
       <td class="num ess">${eur(a.essCost)}</td>
@@ -449,7 +469,7 @@
       document.getElementById('asof').textContent = last ? `// through ${last.fixture_name} · ${rows.length} leaderboard-weeks` : '';
       render();
     } catch (e) {
-      document.getElementById('tbody').innerHTML = `<tr><td colspan="11" class="empty">// data not available yet</td></tr>`;
+      document.getElementById('tbody').innerHTML = `<tr><td colspan="13" class="empty">// data not available yet</td></tr>`;
     }
   })();
 </script>
