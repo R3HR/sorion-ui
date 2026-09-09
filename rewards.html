@@ -68,16 +68,21 @@
   th, td { padding: 11px 12px; text-align: left; font-size: 13px; white-space: nowrap; }
   thead th { font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
              color: var(--text2); background: var(--surface2); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
-  thead th.sorted { color: var(--purple); }
+  /* Sortierte Spalte bleibt farblich wie alle anderen (Ansage Jonas 09.09.), erkennbar
+     nur an einem dezenten Strich. Farbe im Kopf war vorher doppelt belegt: einmal als
+     Sortier-Hinweis, einmal als Cash-Akzent, das sah zusammengewuerfelt aus. */
+  thead th.sorted { color: var(--text2); box-shadow: inset 0 -2px 0 var(--purple); }
   tbody tr + tr td { border-top: 1px solid var(--border); }
   tbody tr:hover td { background: rgba(176,96,255,.04); }
   td.num { text-align: right; font-family: 'Share Tech Mono', monospace; }
   th.num { text-align: right; }
   td .rng { color: var(--dim); font-size: 10px; margin-left: 4px; }
-  .cash { color: var(--up); } .ess { color: var(--purple); }
+  /* Cash und Essence teilen sich jetzt das Lila der Seite (Ansage Jonas 09.09.).
+     Das Gruen stach heraus und passte nicht zum Rest von SORION. */
+  .cash { color: var(--purple); } .ess { color: var(--purple); }
   /* Pro-Gate: der Wert kommt gar nicht erst vom Server (Migration
      2026-09-06_user_tiers_feature_access.sql) — hier steht nur ein Platzhalter. */
-  .lockv { filter: blur(4px); user-select: none; color: var(--up); opacity: .75; }
+  .lockv { filter: blur(4px); user-select: none; color: var(--purple); opacity: .75; }
   .lock-ico { margin-left: 5px; opacity: .8; }
   .pro-chip { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px;
               background: rgba(176,96,255,.15); border: 1px solid var(--purple); color: var(--purple);
@@ -341,7 +346,7 @@
     if (v.length < 2) return '<span class="rng">—</span>';
     const W = 90, H = 22, min = Math.min(...v), max = Math.max(...v), r = max - min || 1;
     const pts = v.map((y, i) => `${(i / (v.length - 1) * W).toFixed(1)},${(H - 3 - (y - min) / r * (H - 6)).toFixed(1)}`).join(' ');
-    return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><polyline points="${pts}" fill="none" stroke="#00f5a0" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+    return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><polyline points="${pts}" fill="none" stroke="#b060ff" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
   }
 
   function aggregate() {
