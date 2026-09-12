@@ -998,13 +998,13 @@
     <div class="pm-head">
       <div>
         <div class="pm-name">⌕ Manager Search</div>
-        <div class="pm-sub">Look up any Sorare manager — collections are public</div>
+        <div class="pm-sub">Look up any Sorare manager: collections are public</div>
       </div>
       <button class="pm-close" onclick="closeManagerSearch()">✕</button>
     </div>
     <div class="pm-body">
       <div style="display:flex;gap:8px;margin-bottom:14px">
-        <input id="ms-input" placeholder="manager name, e.g. jr3hr" spellcheck="false"
+        <input id="ms-input" placeholder="username or sorare.com profile link" spellcheck="false"
           style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:12px"
           onkeydown="if(event.key==='Enter')msSearch()">
         <button class="btn-sorare" style="padding:10px 18px;font-size:11px" onclick="msSearch()">Load</button>
@@ -2364,9 +2364,30 @@
   function closeManagerSearch() { document.getElementById('ms-backdrop').style.display = 'none'; }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeManagerSearch(); });
 
+  // Sorare-Anzeigename und Slug sind oft verschieden (Umbenennung, Umlaute):
+  // "KalleAusSuelz" ist ein Nickname, gesucht wird aber der Slug. Ohne Login gibt
+  // die Sorare-API keinen Weg vom Nickname zum Slug her (usersPaginated verlangt
+  // einen eingeloggten Nutzer). Deshalb nimmt die Suche auch einen eingefuegten
+  // Profillink an, dort steht der echte Slug.
+  function msNormalizeInput(raw) {
+    let v = String(raw || '').trim();
+    if (/sorare\.com/i.test(v)) {
+      try {
+        const u = new URL(/^https?:/i.test(v) ? v : 'https://' + v);
+        const parts = u.pathname.split('/').filter(Boolean);
+        const i = parts.findIndex(x => /^(my-club|gallery|club|u|users|user)$/i.test(x));
+        v = decodeURIComponent(i >= 0 && parts[i + 1] ? parts[i + 1] : (parts[parts.length - 1] || ''));
+      } catch {}
+    }
+    return v.replace(/^@/, '').toLowerCase();
+  }
+
   async function msSearch() {
-    const slug = document.getElementById('ms-input').value.trim().toLowerCase();
+    let slug = msNormalizeInput(document.getElementById('ms-input').value);
     if (!slug) return;
+    // Nickname oder neuer Slug -> Primaer-Slug. Fehlte auf dieser Seite, index.html
+    // hatte es seit BUG-039 bereits: Umbenannte Manager waren hier nicht auffindbar.
+    if (typeof resolveManagerSlug === 'function') slug = (await resolveManagerSlug(slug)) || slug;
     const box = document.getElementById('ms-result');
     box.innerHTML = '<div class="pm-nodata">// loading collection…</div>';
     try {
@@ -2396,7 +2417,11 @@
           body: JSON.stringify({ action: 'user_cards', slug, rarity, cursor }),
         });
         const d = await res.json();
-        if (d.error) throw new Error('manager not found');
+        // Nur ein echtes "not found" als solches melden; Zeitueberschreitung oder
+        // Drosselung bei Sorare sahen frueher genauso aus.
+        if (d.error) throw new Error(/not found/i.test(String(d.error))
+          ? 'manager not found. Sorare usernames often differ from display names: open the manager on sorare.com and paste the profile link here.'
+          : 'Sorare did not respond, please try again in a moment.');
         for (const n of d?.nodes ?? []) {
           cards.push({
             rarity,
