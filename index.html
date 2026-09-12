@@ -399,6 +399,8 @@
   }
 
   .search-input::placeholder { color: var(--dim); }
+  .sugg { color: var(--accent, #b060ff); text-decoration: none; border-bottom: 1px dotted currentColor; }
+  .sugg:hover { filter: brightness(1.25); }
 
   .filter-btn {
     background: var(--surface);
@@ -1709,6 +1711,12 @@
   // Suche werden sie entfernt (Spielernamen enthalten keine).
   const qsan = s => s.replace(/[",()\\*]/g, '').trim();
 
+  // Akzente entfernen: "Garcia" soll "García" finden und umgekehrt. Sorares
+  // Spieler-Slugs sind bereits akzentfrei (aleix-garcia-serrano, alexander-nubel,
+  // ismail-yuksek), deshalb ist der Slug die verlaessliche Suchgrundlage.
+  const deacc = t => t.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const slugPattern = t => deacc(t).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
   // Sichtbarkeitsregel wie bisher im Client: eine Zeile "zaehlt", sobald
   // irgendein Preissignal existiert (FMV, Floor oder ein Sale).
   const VISIBLE = 'or=(fmv.not.is.null,floor_price.not.is.null,sale_1.not.is.null)';
@@ -1719,8 +1727,11 @@
     const search = qsan((document.getElementById('search')?.value || '').toLowerCase());
     if (search) {
       const pat = encodeURIComponent(`*${search}*`);
+      // Zusaetzlich ueber den Slug suchen, damit Akzente keine Rolle spielen.
+      const spat = slugPattern(search);
+      const slugTerm = spat ? `,player_slug.ilike.${encodeURIComponent('*' + spat + '*')}` : '';
       // Suche UND Sichtbarkeit sind beides or-Gruppen -> in einen and-Baum
-      p.push(`and=(or(fmv.not.is.null,floor_price.not.is.null,sale_1.not.is.null),or(player_name.ilike.${pat},team_name.ilike.${pat}))`);
+      p.push(`and=(or(fmv.not.is.null,floor_price.not.is.null,sale_1.not.is.null),or(player_name.ilike.${pat},team_name.ilike.${pat}${slugTerm}))`);
     } else {
       p.push(VISIBLE);
     }
@@ -2537,6 +2548,47 @@
     return d <= 3 ? 'var(--up)' : d <= 14 ? 'var(--text2)' : '#7a6a90';   // alt = gedaempft
   };
 
+  // Kein Treffer? Dann nach aehnlichen Namen fragen (RPC search_players_similar,
+  // Trigramm-Vergleich auf dem Slug). Faengt Tippfehler und Namensvarianten ab:
+  // "alex garcia" findet "Aleix Garcia", "belingham" findet "Bellingham".
+  // Laeuft NUR bei null Treffern, kostet im Normalfall also gar nichts.
+  const sesc = t => String(t ?? '').replace(/[<>&"']/g, c =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  async function showSimilar(q) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_players_similar`, {
+        method: 'POST',
+        headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_query: q, p_eligibility: eligFilter, p_limit: 6 }),
+      });
+      if (!r.ok) return;
+      const hits = await r.json();
+      if (!Array.isArray(hits) || !hits.length) return;
+      // Zwischenzeitlich weitergetippt? Dann ist das Ergebnis veraltet.
+      const jetzt = (document.getElementById('search')?.value || '').toLowerCase().trim();
+      if (jetzt !== q) return;
+      const links = hits.map(h =>
+        `<a href="#" class="sugg" data-name="${sesc(h.player_name)}">${sesc(h.player_name)}</a>`
+      ).join(' <span style="opacity:.4">·</span> ');
+      const tb = document.getElementById('table-body');
+      if (tb) tb.innerHTML = `<tr class="empty-row"><td colspan="10">`
+        + `// no exact match. did you mean: ${links}</td></tr>`;
+    } catch {}
+  }
+
+  // Klick auf einen Vorschlag: Delegation, damit Namen mit Apostroph nicht brechen.
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a.sugg');
+    if (!a) return;
+    e.preventDefault();
+    const box = document.getElementById('search');
+    if (!box) return;
+    box.value = a.dataset.name || '';
+    currentPage = 1;
+    filterTable();
+  });
+
   function renderTable() {
     const tbody  = document.getElementById('table-body');
     const start  = (currentPage-1)*PAGE_SIZE;
@@ -2545,6 +2597,7 @@
 
     if (!page.length) {
       tbody.innerHTML = `<tr class="empty-row"><td colspan="10">// no players found</td></tr>`;
+      if (search) showSimilar(search);
       renderPagination(); renderCards(); return;
     }
 
