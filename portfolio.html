@@ -286,8 +286,8 @@
   .p-stat-sub .e-xp   { color: var(--sr); }
   .p-stat-label {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 8px;
-    letter-spacing: 0.2em;
+    font-size: 11px;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--purple);
     margin-bottom: 6px;
@@ -708,7 +708,8 @@
   @media (max-width: 720px) {
     /* Mindestschrift — die Basis ist inzwischen groesser (04.09.), diese Regel
        darf sie nicht mehr nach UNTEN ziehen */
-    .p-stat-label, .card-rarity { font-size: 10px; }
+    .p-stat-label { font-size: 10.5px; }
+    .card-rarity { font-size: 10px; }
     .pm-label { font-size: 10px; }
     .pm-section { font-size: 11px; }
     /* Schliessen-Knopf der Manager-Suche: groessere Tippflaeche */
@@ -772,6 +773,7 @@
       <div class="p-stat">
         <div class="p-stat-label">// Portfolio Value</div>
         <div class="p-stat-value" id="stat-value">—</div>
+        <div class="p-stat-sub" id="stat-value-sub"></div>
       </div>
       <div class="p-stat">
         <div class="p-stat-label">// Invested</div>
@@ -780,6 +782,7 @@
       <div class="p-stat">
         <div class="p-stat-label" id="stat-pnl-label">// P&amp;L · net of 5% fee</div>
         <div class="p-stat-value" id="stat-pnl">—</div>
+        <div class="p-stat-sub" id="stat-pnl-sub"></div>
       </div>
       <div class="p-stat" id="stat-earn-box" style="display:none">
         <div class="p-stat-label">// Earned in lineups</div>
@@ -2184,7 +2187,13 @@
     document.getElementById('stat-rare').textContent    = rar.length;
     document.getElementById('stat-sr').textContent      = sr.length;
 
+    // Value zaehlt ALLE Karten, P&L nur gekaufte. Nebeneinander wirkte das wie ein
+    // Widerspruch (Value > Invested, trotzdem negativ). Deshalb wird beides unter den
+    // Kacheln aufgeschluesselt: geschenkte Karten (Rewards, Crafts) haben keinen
+    // Kaufpreis und koennen keinen Gewinn/Verlust haben; die Verkaufsgebuehr
+    // (5 %, mind. 0,10 EUR) trifft billige Karten ueberproportional.
     let total = 0, invested = 0, pnl = 0, pnlBasis = 0;
+    let valBought = 0, valFree = 0, nFree = 0, fees = 0, buyNoPrice = 0, nNoPrice = 0;
     for (const c of allCards) {
       const rarity  = c.rarityTyped?.toLowerCase() || 'limited';
       const fmvData = fmvCache[`${c.player?.slug}_${rarity}_${eligOf(c)}`];
@@ -2194,12 +2203,17 @@
       if (buy != null && buy > 0) {
         invested += buy;
         const sv = sellValue(v);
-        if (v) { pnl += sv - buy; pnlBasis += buy; }
-      }
+        if (v) { pnl += sv - buy; pnlBasis += buy; valBought += v; fees += v - sv; }
+        else   { buyNoPrice += buy; nNoPrice++; }
+      } else if (v) { valFree += v; nFree++; }
     }
 
     document.getElementById('stat-value').textContent =
       total > 0 ? `€${total.toFixed(0)}` : '—';
+    const vSub = document.getElementById('stat-value-sub');
+    if (vSub) vSub.textContent = total > 0
+      ? `€${valBought.toFixed(0)} bought · €${valFree.toFixed(0)} free (${nFree} rewards/crafts)`
+      : '';
     document.getElementById('stat-invested').textContent =
       invested > 0 ? `€${invested.toFixed(0)}` : '—';
     const pnlEl = document.getElementById('stat-pnl');
@@ -2207,8 +2221,15 @@
       const pct = (pnl / pnlBasis) * 100;
       pnlEl.textContent = `${pnl >= 0 ? '+' : ''}€${pnl.toFixed(0)} (${pnl >= 0 ? '+' : ''}${pct.toFixed(1)}%)`;
       const pnlLbl = document.getElementById('stat-pnl-label');
-      if (pnlLbl) pnlLbl.textContent = netMode ? `// P&L · net of fees (${feePct()}%, min €${MIN_FEE.toFixed(2)})` : '// P&L · gross';
+      if (pnlLbl) pnlLbl.textContent = netMode ? '// P&L · after fees' : '// P&L · gross';
       pnlEl.style.color = pnl >= 0 ? 'var(--up)' : 'var(--down)';
+      const pSub = document.getElementById('stat-pnl-sub');
+      if (pSub) {
+        const bits = ['bought cards only'];
+        if (netMode && fees >= 0.5) bits.push(`€${fees.toFixed(0)} fees (${feePct()}%, min €${MIN_FEE.toFixed(2)})`);
+        if (nNoPrice) bits.push(`€${buyNoPrice.toFixed(0)} in ${nNoPrice} unpriced`);
+        pSub.textContent = bits.join(' · ');
+      }
     } else {
       pnlEl.textContent = '—';
     }
