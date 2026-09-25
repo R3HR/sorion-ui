@@ -104,6 +104,13 @@
   <!-- ── Auth (nicht eingeloggt) ─────────────────────────────── -->
   <div id="auth-view" style="display:none">
     <h1>// Account</h1>
+    <!-- Anmeldung ohne eigene Mailadresse: Sorare IST die Identitaet. Der Knopf steht
+         bewusst ueber den Tabs, weil das fuer die allermeisten der kuerzeste Weg ist. -->
+    <div class="card" style="margin-bottom:14px">
+      <button onclick="loginWithSorare()">Sign in with Sorare</button>
+      <div class="hint" style="margin-top:8px">No email needed. We only receive your public manager name, and your portfolio is tied to it right away.</div>
+    </div>
+    <div class="hint" style="text-align:center;margin-bottom:12px">or with an email address</div>
     <div class="tabs">
       <div class="tab active" id="tab-login" onclick="switchTab('login')">Sign in</div>
       <div class="tab" id="tab-signup" onclick="switchTab('signup')">Sign up</div>
@@ -396,6 +403,11 @@
         if (inp) inp.disabled = false;
       }
     };
+
+    // Anmelden UND Verknuepfen laufen ueber dieselbe Sorare-Autorisierung. Welche
+    // der beiden es wird, entscheidet die Rueckkehrseite: liegt eine Sorion-Sitzung
+    // vor, wird verknuepft, sonst angemeldet.
+    window.loginWithSorare = () => window.connectSorare();
 
     window.connectSorare = () => {
       const CLIENT_ID = 'JwRtoOABm0DtyOM5_xDKlFaF2-gp7uUAS4bQeQcuUjw';

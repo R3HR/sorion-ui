@@ -61,8 +61,40 @@
     // der Sorare-Login ist NUR der Nachweis fuer den Manager-Slug, kein Zweitkonto.
     let session = null;
     try { session = JSON.parse(localStorage.getItem('sorion_session') || 'null'); } catch {}
+    // KEINE Sorion-Sitzung: dann ist das eine ANMELDUNG mit Sorare, keine Verknuepfung.
+    // Sorare ist in dem Fall die Identitaet, eine eigene Mailadresse braucht niemand.
     if (!session?.access_token) {
-      return done('// you need to be signed in to SORION first.<br>Sign in, then connect Sorare from your profile.' + backToProfile, 'err');
+      try {
+        const exRes = await fetch(`${SUPABASE_URL}/functions/v1/sorare-oauth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY },
+          body: JSON.stringify({ action: 'exchange', code, redirect_uri: CALLBACK }),
+        });
+        const ex = await exRes.json();
+        if (!ex.access_token) throw new Error(ex.error || 'token exchange failed');
+
+        // Der Server leitet die Identitaet aus dem Token ab (SEC-005), nie aus einem
+        // mitgeschickten Slug, und gibt eine fertige Sorion-Sitzung zurueck.
+        const inRes = await fetch(`${SUPABASE_URL}/functions/v1/sorare-oauth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY },
+          body: JSON.stringify({ action: 'login', access_token: ex.access_token }),
+        });
+        const inn = await inRes.json();
+        if (!inRes.ok || !inn?.session?.access_token) throw new Error(inn.error || inn?.session?.error_description || 'sign in failed');
+
+        localStorage.setItem('sorion_session', JSON.stringify(inn.session));
+        try { localStorage.setItem('sorion_own', String(inn.sorare_slug).toLowerCase()); } catch {}
+        try {
+          localStorage.setItem('sorare_access_token', ex.access_token);
+          if (ex.refresh_token) localStorage.setItem('sorare_refresh_token', ex.refresh_token);
+        } catch {}
+        done('// signed in as <b>' + String(inn.sorare_slug).replace(/[<>]/g, '') + '</b>' + backToProfile, 'ok');
+        setTimeout(() => { location.href = '../profile.html'; }, 1600);
+      } catch (e) {
+        done('// ' + String(e.message).replace(/[<>]/g, '') + backToProfile, 'err');
+      }
+      return;
     }
 
     try {
