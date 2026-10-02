@@ -403,6 +403,9 @@
   // Quelle: RPC top_earners. Cash ist Pro (gleiches Gate wie die Cash-Spalten);
   // gesperrt liefert der Server Zeilen ohne Namen und Zahlen, hier wird nur geblurrt.
   let earnKind = 'cash', earnSeq = 0, earnAll = false;
+  // Supabase liefert ueber PostgREST hoechstens 1000 Zeilen je Abfrage (max-rows), auch bei
+  // RPCs. Mehr anzufordern bringt nichts, deshalb ist das hier die ehrliche Obergrenze.
+  const MAX_ROWS = 1000;
   // Fuer die Suche: Gross/klein und Akzente ignorieren ("muller" findet "Müller")
   // Ø, ß, Ł, Æ und Co. sind eigene Buchstaben, keine abtrennbaren Akzente: einzeln abbilden.
   const SPECIAL = { 'ø': 'o', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss', 'ł': 'l', 'đ': 'd', 'ð': 'd', 'ı': 'i', 'þ': 'th' };
@@ -466,7 +469,7 @@
     const call = t => fetch(`${BASE}/rpc/top_earners`, {
       method: 'POST',
       headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_competition: comp, p_rarity: rarity, p_kind: earnKind, p_limit: earnAll ? 2000 : 25 }),
+      body: JSON.stringify({ p_competition: comp, p_rarity: rarity, p_kind: earnKind, p_limit: earnAll ? MAX_ROWS : 25 }),
     });
     try {
       const tok = await authToken();
@@ -510,7 +513,7 @@
       more.style.display = offer ? '' : 'none';
       search.style.display = offer && earnAll ? '' : 'none';
       document.getElementById('earn-all').textContent = earnAll ? 'Show top 25'
-        : total > 2000 ? `Show top 2,000 of ${n0(total)} ${earnKind} winners`
+        : total > MAX_ROWS ? `Show top ${n0(MAX_ROWS)} of ${n0(total)} ${earnKind} winners`
         : `Show all ${n0(total)} ${earnKind} winners`;
     } catch (e) {
       if (seq !== earnSeq) return;
