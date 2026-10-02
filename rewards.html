@@ -293,8 +293,7 @@
 
   <div class="controls" id="earn-ctl">
     <button class="btn cashk active" data-k="cash" onclick="setEarnKind('cash')">$ Cash</button>
-    <button class="btn essk" data-k="essence" disabled
-            title="Coming tonight: essence rankings are being calculated">◆ Essence <span class="soon">SOON</span></button>
+    <button class="btn essk" data-k="essence" onclick="setEarnKind('essence')">◆ Essence</button>
     <select class="sel" id="earn-comp" aria-label="Competition" onchange="loadEarners()"></select>
     <span class="mono" id="earn-note" style="margin-left:auto;font-size:10px;color:var(--text2);letter-spacing:.1em"></span>
   </div>
