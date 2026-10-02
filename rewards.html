@@ -107,6 +107,23 @@
   .voucher a.dc:hover { box-shadow: 0 0 18px rgba(133,187,101,.5); transform: translateY(-1px); }
   @media (max-width: 620px) { .voucher a.dc { margin-left: 0; } }
   .comp { font-weight: 600; }
+  /* Liga in der Haupttabelle anklickbar: oeffnet ihre Top-Verdiener weiter unten */
+  #tbody td.comp { cursor: pointer; }
+  #tbody td.comp:hover { color: var(--purple); }
+
+  /* ── Top-Verdiener (02.10.2026) ── */
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn:disabled:hover { border-color: var(--border); color: var(--text2); }
+  .btn.cashk.active { border-color: var(--cash); color: var(--cash); background: rgba(133,187,101,.10); }
+  .soon { font-size: 9px; letter-spacing: .1em; margin-left: 4px; padding: 1px 5px; border-radius: 4px;
+          border: 1px solid var(--border); color: var(--dim); }
+  .sel { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text);
+         font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: .05em;
+         padding: 9px 12px; min-width: 220px; cursor: pointer; }
+  .sel:hover, .sel:focus { border-color: var(--purple); outline: none; }
+  #earn-body td a { color: var(--text); text-decoration: none; }
+  #earn-body td a:hover { color: var(--purple); }
+  .earn-pos { color: var(--dim); }
   .spark { vertical-align: middle; }
   .empty { padding: 26px; text-align: center; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
   .note { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--purple);
@@ -267,6 +284,37 @@
     </table>
   </div>
 
+  <h2 id="earners">// Top earners</h2>
+  <p>Which players actually bring the rewards home? Every winning lineup's prize is split across its
+     cards by their <strong>share of the points</strong>: a player who scored 80 of the lineup's 400
+     points is credited with 20 %. Summed over the season, per competition and rarity. Pick a
+     competition below, or click one in the table above.</p>
+
+  <div class="controls" id="earn-ctl">
+    <button class="btn cashk active" data-k="cash" onclick="setEarnKind('cash')">$ Cash</button>
+    <button class="btn" data-k="essence" disabled
+            title="Coming soon: essence needs every paid rank, not just a sample">◆ Essence <span class="soon">SOON</span></button>
+    <select class="sel" id="earn-comp" aria-label="Competition" onchange="loadEarners()"></select>
+    <span class="mono" id="earn-note" style="margin-left:auto;font-size:10px;color:var(--text2);letter-spacing:.1em"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table aria-label="Top earners per competition" style="min-width:640px">
+      <thead>
+        <tr>
+          <th class="num">#</th>
+          <th>Player</th>
+          <th>Club</th>
+          <th class="num">winning lineups</th>
+          <th class="num">GWs</th>
+          <th class="num">points</th>
+          <th class="num">earned</th>
+        </tr>
+      </thead>
+      <tbody id="earn-body"><tr><td colspan="7" class="empty">// loading…</td></tr></tbody>
+    </table>
+  </div>
+
   <h2>// How to read this</h2>
   <ul>
     <li><strong>Cash from</strong> = average score of the lowest-ranked manager who received USD in that leaderboard; the small range is min–max across gameweeks. Score above it and, historically, you were in the money.</li>
@@ -335,7 +383,95 @@
     rarity = r;
     document.querySelectorAll('#rarity-ctl .btn').forEach(b => b.classList.toggle('active', b.dataset.r === r));
     render();
+    fillEarnComps();
   }
+
+  // ── Top-Verdiener je Liga (02.10.2026) ──────────────────────────────────
+  // Quelle: RPC top_earners. Cash ist Pro (gleiches Gate wie die Cash-Spalten);
+  // gesperrt liefert der Server Zeilen ohne Namen und Zahlen, hier wird nur geblurrt.
+  let earnKind = 'cash', earnSeq = 0;
+  const usd = v => v == null ? '—' : '$' + (v < 100 ? Number(v).toFixed(2) : Math.round(v).toLocaleString('en-GB'));
+
+  function setEarnKind(k) {
+    earnKind = k;
+    document.querySelectorAll('#earn-ctl .btn').forEach(b => b.classList.toggle('active', b.dataset.k === k));
+    fillEarnComps();
+  }
+
+  // Dropdown: nur Ligen, die in dieser Rarity ueberhaupt Cash zahlen. Auswahl bleibt
+  // beim Rarity-Wechsel erhalten, wenn es die Liga dort auch gibt. Ohne Pro startet
+  // die Liste bei der freien Kostprobe, damit man sofort echte Zahlen sieht.
+  function fillEarnComps(prefer) {
+    const sel = document.getElementById('earn-comp');
+    const comps = [...new Set(rows.filter(r => r.rarity === rarity && r.cash_rank != null).map(r => r.competition))]
+      .sort((a, b) => a.localeCompare(b));
+    const keep = prefer ?? sel.value;
+    sel.innerHTML = comps.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    if (!comps.length) {
+      document.getElementById('earn-body').innerHTML = `<tr><td colspan="7" class="empty">// no competition pays cash in this rarity</td></tr>`;
+      document.getElementById('earn-note').textContent = '';
+      return;
+    }
+    const sample = rows.find(r => r.rarity === rarity && !r.cash_locked && r.cash_score != null)?.competition;
+    sel.value = comps.includes(keep) ? keep : (cashLocked && sample && comps.includes(sample) ? sample : comps[0]);
+    loadEarners();
+  }
+
+  async function loadEarners() {
+    const comp = document.getElementById('earn-comp').value;
+    const body = document.getElementById('earn-body');
+    const note = document.getElementById('earn-note');
+    if (!comp) return;
+    const seq = ++earnSeq;                       // spaete Antworten verwerfen
+    body.innerHTML = `<tr><td colspan="7" class="empty">// loading…</td></tr>`;
+    const call = t => fetch(`${BASE}/rpc/top_earners`, {
+      method: 'POST',
+      headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_competition: comp, p_rarity: rarity, p_kind: earnKind, p_limit: 25 }),
+    });
+    try {
+      const tok = await authToken();
+      let res = await call(tok || KEY);
+      if (!res.ok && tok) res = await call(KEY);
+      if (!res.ok) throw new Error(res.status);
+      const list = await res.json();
+      if (seq !== earnSeq) return;
+      if (!list.length) {
+        body.innerHTML = `<tr><td colspan="7" class="empty">// no winning lineups recorded yet</td></tr>`;
+        note.textContent = '';
+        return;
+      }
+      const locked = list.some(r => r.locked);
+      const lock = '<span class="lockv">000</span><span class="lock-ico">🔒</span>';
+      body.innerHTML = list.map(r => r.locked
+        ? `<tr><td class="num earn-pos">${r.pos}</td><td>${lock}</td><td>${lock}</td>
+             <td class="num">${lock}</td><td class="num">${lock}</td><td class="num">${lock}</td><td class="num cash">${lock}</td></tr>`
+        : `<tr><td class="num earn-pos">${r.pos}</td>
+             <td class="comp"><a href="https://sorare.com/football/players/${encodeURIComponent(r.player_slug)}" target="_blank" rel="noopener">${esc(r.player_name ?? r.player_slug)}</a></td>
+             <td>${esc(r.club ?? '—')}</td>
+             <td class="num">${n0(r.lineups)}</td>
+             <td class="num">${n0(r.gameweeks)}</td>
+             <td class="num">${n0(r.points)}</td>
+             <td class="num cash">${usd(r.earned)}</td></tr>`).join('');
+      note.textContent = locked ? '// cash earners are a Pro feature' : `// ${comp} · ${rarity.replace('_', ' ')} · top ${list.length}`;
+    } catch (e) {
+      if (seq !== earnSeq) return;
+      body.innerHTML = `<tr><td colspan="7" class="empty">// data not available yet</td></tr>`;
+      note.textContent = '';
+    }
+  }
+
+  // Klick auf eine Liga in der Haupttabelle: Dropdown setzen und hinspringen
+  document.getElementById('tbody').addEventListener('click', e => {
+    const td = e.target.closest('td.comp');
+    if (!td) return;
+    const comp = td.textContent.trim();
+    const sel = document.getElementById('earn-comp');
+    if (![...sel.options].some(o => o.value === comp)) return;   // Liga zahlt kein Cash
+    sel.value = comp;
+    loadEarners();
+    document.getElementById('earners').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   function sortBy(k) { if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = k === 'comp' ? 1 : -1; } render(); }
 
   // Verlauf der Cash-Schwelle ueber die Spieltage als Mini-SVG
@@ -394,7 +530,7 @@
       return typeof ka === 'string' ? sortDir * ka.localeCompare(kb) : sortDir * (ka - kb);
     });
     tb.innerHTML = agg.map(a => `<tr>
-      <td class="comp">${esc(a.comp)}</td>
+      <td class="comp" title="Show top earners">${esc(a.comp)}</td>
       <td class="num">${a.gws}</td>
       <td class="num cash">${a.locked
           ? '<span class="lockv">000</span><span class="lock-ico">🔒</span>'
@@ -474,6 +610,7 @@
       const last = rows.length ? rows.reduce((m, r) => r.start_date > m.start_date ? r : m) : null;
       document.getElementById('asof').textContent = last ? `// through ${last.fixture_name} · ${rows.length} leaderboard-weeks` : '';
       render();
+      fillEarnComps();
     } catch (e) {
       document.getElementById('tbody').innerHTML = `<tr><td colspan="13" class="empty">// data not available yet</td></tr>`;
     }
