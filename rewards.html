@@ -293,7 +293,8 @@
 
   <div class="controls" id="earn-ctl">
     <button class="btn cashk active" data-k="cash" onclick="setEarnKind('cash')">$ Cash</button>
-    <button class="btn essk" data-k="essence" onclick="setEarnKind('essence')">◆ Essence</button>
+    <button class="btn essk" data-k="essence" disabled
+            title="Coming tonight: essence rankings are being calculated">◆ Essence <span class="soon">SOON</span></button>
     <select class="sel" id="earn-comp" aria-label="Competition" onchange="loadEarners()"></select>
     <span class="mono" id="earn-note" style="margin-left:auto;font-size:10px;color:var(--text2);letter-spacing:.1em"></span>
   </div>
@@ -313,6 +314,14 @@
       </thead>
       <tbody id="earn-body"><tr><td colspan="7" class="empty">// loading…</td></tr></tbody>
     </table>
+  </div>
+  <!-- Ganze Liste statt Top 25 (02.10.): Knopf, und sobald alles geladen ist ein Suchfeld.
+       Sichtbarkeit per style.display, weil .controls display:flex das hidden-Attribut aushebelt. -->
+  <div class="controls" id="earn-more" style="display:none">
+    <button class="btn" id="earn-all" type="button" onclick="toggleEarnAll()"></button>
+    <input class="sel" id="earn-search" type="search" placeholder="Find a player or club"
+           aria-label="Find a player or club" oninput="filterEarners()" style="display:none">
+    <span class="mono" id="earn-hits" style="font-size:10px;color:var(--text2);letter-spacing:.1em"></span>
   </div>
 
   <h2>// How to read this</h2>
@@ -394,7 +403,25 @@
   // ── Top-Verdiener je Liga (02.10.2026) ──────────────────────────────────
   // Quelle: RPC top_earners. Cash ist Pro (gleiches Gate wie die Cash-Spalten);
   // gesperrt liefert der Server Zeilen ohne Namen und Zahlen, hier wird nur geblurrt.
-  let earnKind = 'cash', earnSeq = 0;
+  let earnKind = 'cash', earnSeq = 0, earnAll = false;
+  // Fuer die Suche: Gross/klein und Akzente ignorieren ("muller" findet "Müller")
+  // Ø, ß, Ł, Æ und Co. sind eigene Buchstaben, keine abtrennbaren Akzente: einzeln abbilden.
+  const SPECIAL = { 'ø': 'o', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss', 'ł': 'l', 'đ': 'd', 'ð': 'd', 'ı': 'i', 'þ': 'th' };
+  const fold = s => String(s ?? '').toLowerCase().replace(/[øæœßłđðıþ]/g, c => SPECIAL[c])
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  function toggleEarnAll() { earnAll = !earnAll; loadEarners(true); }
+
+  function filterEarners() {
+    const q = fold(document.getElementById('earn-search').value.trim());
+    let hits = 0;
+    document.querySelectorAll('#earn-body tr[data-q]').forEach(tr => {
+      const show = !q || tr.dataset.q.includes(q);
+      tr.style.display = show ? '' : 'none';
+      if (show) hits++;
+    });
+    document.getElementById('earn-hits').textContent = q ? `// ${hits} match${hits === 1 ? '' : 'es'}` : '';
+  }
   const usd = v => v == null ? '—' : '$' + (v < 100 ? Number(v).toFixed(2) : Math.round(v).toLocaleString('en-GB'));
 
   function setEarnKind(k) {
@@ -424,17 +451,23 @@
     loadEarners();
   }
 
-  async function loadEarners() {
+  // keepAll = true nur beim Umschalten Top 25 / alle. Jeder andere Aufruf (Liga, Art,
+  // Rarity, Klick in der Haupttabelle) startet wieder bei den Top 25.
+  async function loadEarners(keepAll = false) {
     const comp = document.getElementById('earn-comp').value;
     const body = document.getElementById('earn-body');
     const note = document.getElementById('earn-note');
-    if (!comp) return;
+    const more = document.getElementById('earn-more');
+    const search = document.getElementById('earn-search');
+    if (!keepAll) earnAll = false;
+    search.value = ''; document.getElementById('earn-hits').textContent = '';
+    if (!comp) { more.style.display = 'none'; return; }
     const seq = ++earnSeq;                       // spaete Antworten verwerfen
     body.innerHTML = `<tr><td colspan="7" class="empty">// loading…</td></tr>`;
     const call = t => fetch(`${BASE}/rpc/top_earners`, {
       method: 'POST',
       headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_competition: comp, p_rarity: rarity, p_kind: earnKind, p_limit: 25 }),
+      body: JSON.stringify({ p_competition: comp, p_rarity: rarity, p_kind: earnKind, p_limit: earnAll ? 2000 : 25 }),
     });
     try {
       const tok = await authToken();
@@ -450,6 +483,7 @@
       if (!list.length) {
         body.innerHTML = `<tr><td colspan="7" class="empty">// no winning lineups recorded yet</td></tr>`;
         note.textContent = '';
+        more.style.display = 'none';
         return;
       }
       const locked = list.some(r => r.locked);
@@ -459,19 +493,31 @@
       body.innerHTML = list.map(r => r.locked
         ? `<tr><td class="num earn-pos">${r.pos}</td><td>${lock}</td><td>${lock}</td>
              <td class="num">${lock}</td><td class="num">${lock}</td><td class="num">${lock}</td><td class="num ${cls}">${lock}</td></tr>`
-        : `<tr><td class="num earn-pos">${r.pos}</td>
+        : `<tr data-q="${esc(fold((r.player_name ?? r.player_slug) + ' ' + (r.club ?? '')))}"><td class="num earn-pos">${r.pos}</td>
              <td class="comp"><a href="https://sorare.com/football/players/${encodeURIComponent(r.player_slug)}" target="_blank" rel="noopener">${esc(r.player_name ?? r.player_slug)}</a></td>
              <td>${esc(r.club ?? '—')}</td>
              <td class="num">${n0(r.lineups)}</td>
              <td class="num">${n0(r.gameweeks)}</td>
              <td class="num">${n0(r.points)}</td>
              <td class="num ${cls}">${val(r.earned)}</td></tr>`).join('');
+      const total = list[0]?.total ?? list.length;
+      const shown = earnAll ? (list.length < total ? `top ${n0(list.length)} of ${n0(total)}` : `all ${n0(total)}`)
+                            : `top ${list.length} of ${n0(total)}`;
       note.textContent = locked ? '// cash earners are a Pro feature'
-        : `// ${comp} · ${rarity.replace('_', ' ')} · top ${list.length}` + (earnKind === 'essence' ? ` · paid in ${unit}` : '');
+        : `// ${comp} · ${rarity.replace('_', ' ')} · ${shown}` + (earnKind === 'essence' ? ` · paid in ${unit}` : '');
+      // Knopf nur, wenn es mehr als 25 gibt und die Liste offen ist. Gesperrt schickt der
+      // Server ohnehin nur 25 Platzhalter.
+      const offer = !locked && total > 25;
+      more.style.display = offer ? '' : 'none';
+      search.style.display = offer && earnAll ? '' : 'none';
+      document.getElementById('earn-all').textContent = earnAll ? 'Show top 25'
+        : total > 2000 ? `Show top 2,000 of ${n0(total)} ${earnKind} winners`
+        : `Show all ${n0(total)} ${earnKind} winners`;
     } catch (e) {
       if (seq !== earnSeq) return;
       body.innerHTML = `<tr><td colspan="7" class="empty">// data not available yet</td></tr>`;
       note.textContent = '';
+      more.style.display = 'none';
     }
   }
 
