@@ -1238,12 +1238,27 @@
 
   async function loadFromDb(slug) {
     const H = { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY };
-    const [syncRes, cardRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/manager_sync?sorare_slug=eq.${encodeURIComponent(slug)}&select=synced_at,card_count`, { headers: H }),
-      fetch(`${SUPABASE_URL}/rest/v1/manager_cards?sorare_slug=eq.${encodeURIComponent(slug)}&select=card_slug,player_slug,player_name,picture_url,rarity,in_season,buy_eur,buy_date,buy_type`, { headers: H }),
-    ]);
+    const syncRes = await fetch(`${SUPABASE_URL}/rest/v1/manager_sync?sorare_slug=eq.${encodeURIComponent(slug)}&select=synced_at,card_count`, { headers: H });
     const sync = syncRes.ok ? (await syncRes.json())[0] : null;
-    const rows = cardRes.ok ? await cardRes.json() : [];
+
+    // PostgREST liefert HART hoechstens 1.000 Zeilen je Anfrage, auch mit groesserem
+    // Range-Kopf. Ohne Blaettern sah ein Depot mit 3.181 Karten deshalb aus wie 1.000
+    // (BUG-047), samt zu niedrigem Wert und falschem P&L. Also seitenweise holen,
+    // bis eine Seite nicht mehr voll ist.
+    const PAGE = 1000, MAX_PAGES = 30;
+    const rows = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const from = page * PAGE, to = from + PAGE - 1;
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/manager_cards?sorare_slug=eq.${encodeURIComponent(slug)}&select=card_slug,player_slug,player_name,picture_url,rarity,in_season,buy_eur,buy_date,buy_type&order=card_slug.asc&offset=${from}&limit=${PAGE}`,
+        { headers: { ...H, 'Range-Unit': 'items', 'Range': `${from}-${to}` } }
+      );
+      if (!res.ok) break;
+      const batch = await res.json();
+      if (!Array.isArray(batch) || !batch.length) break;
+      rows.push(...batch);
+      if (batch.length < PAGE) break;
+    }
     lastSyncedAt = sync?.synced_at ?? null;
     return rows.map(r => ({
       slug: r.card_slug,
