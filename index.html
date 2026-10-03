@@ -1613,7 +1613,7 @@
   let moverRows = [];   // aktuell angezeigte Top/Flop-Zeilen, fuer openModal per Index
   const H_API = { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY };
 
-  const COLS = 'id,player_slug,player_name,team_name,league_name,league_country,picture_url,scarcity,eligibility,tier,fmv,floor_price,sale_1,sale_2,sale_3,sale_4,sale_5,avg_sales,sales_count,change_24h,change_7d,available_supply,position,last_sale_at,updated_at';
+  const COLS = 'id,player_slug,player_name,team_name,league_name,league_country,picture_url,scarcity,eligibility,tier,fmv,floor_price,sale_1,sale_2,sale_3,sale_4,sale_5,avg_sales,sales_count,change_24h,change_7d,available_supply,supply,manager_sales,avg_manager_sales,position,last_sale_at,updated_at';
 
   // Wiederholung mit Pause statt Doppelschuss (20.08., Jonas: "Seite laedt
   // oefter nicht vollstaendig, Refresh hilft"): Die verbliebenen Live-
@@ -2850,26 +2850,79 @@
 
     document.getElementById('modal-grid').innerHTML = [
       ['Floor Price', r.floor_price ? `€${r.floor_price.toFixed(2)}` : '—'],
-      ['Avg Sales',   r.avg_sales   ? `€${r.avg_sales.toFixed(2)}`   : '—'],
+      // Schnitt aus DENSELBEN Verkaeufen wie der FMV, also nur Manager zu Manager.
+      // Vorher stand hier der Schnitt ueber alle Arten, inklusive Sofortkauf: bei
+      // Lamine Yamal 331 EUR neben einem FMV von 252 EUR (BUG-048).
+      ['Avg Manager Sales', r.avg_manager_sales ? `€${r.avg_manager_sales.toFixed(2)}` : (r.avg_sales ? `€${r.avg_sales.toFixed(2)}` : '—')],
       ['Sales (24h)', r.sales_count ?? '—'],
-      ['Supply',      r.available_supply ?? '—'],
+      // "Supply" hiess bisher die Zahl der AKTUELLEN Angebote (bei Yamal 2),
+      // nicht die gepraegte Auflage (392). Beides zeigen, beides benannt.
+      ['Minted',      r.supply ?? '—'],
+      ['On Sale',     r.available_supply ?? '—'],
     ].map(([label, val]) => `
       <div class="modal-stat">
         <div class="modal-stat-label">${label}</div>
         <div class="modal-stat-val">${val}</div>
       </div>`).join('');
 
-    const sales = [r.sale_1, r.sale_2, r.sale_3, r.sale_4, r.sale_5].filter(v => v != null);
-    document.getElementById('modal-sales').innerHTML = sales.length
-      ? sales.map((s, i) => `
+    // Nur Verkaeufe zwischen Managern, denn nur die tragen den FMV. Sorares eigene
+    // Sofortkaeufe und Auktionen sind durch Rabattgutscheine verzerrt und standen
+    // hier frueher ohne Kennzeichnung (BUG-048).
+    const mgr = Array.isArray(r.manager_sales) ? r.manager_sales.filter(x => x && x.eur > 0).slice(0, 5) : [];
+    const ago = d => {
+      const h = (Date.now() - new Date(d).getTime()) / 3600000;
+      if (!isFinite(h)) return '';
+      return h < 24 ? `${Math.max(1, Math.round(h))}h ago` : `${Math.round(h / 24)}d ago`;
+    };
+    // Solange der naechtliche Lauf die Spalte noch nicht gefuellt hat (null statt
+    // leerer Liste), weiter die alte Liste zeigen, aber ehrlich beschriftet.
+    const mgrKnown = r.manager_sales != null;
+    const fallback = [r.sale_1, r.sale_2, r.sale_3, r.sale_4, r.sale_5].filter(v => v != null);
+    document.getElementById('modal-sales').innerHTML = mgr.length
+      ? mgr.map(x => `
         <div class="modal-sale-row">
-          <span class="modal-sale-num">Sale ${i+1}</span>
-          <span class="modal-sale-price">€${s.toFixed(2)}</span>
+          <span class="modal-sale-num">${x.date ? ago(x.date) : 'manager sale'}</span>
+          <span class="modal-sale-price">€${Number(x.eur).toFixed(2)}</span>
         </div>`).join('')
-      : `<div style="color:var(--text2);font-size:11px;font-family:'Share Tech Mono',monospace">No recent sales</div>`;
+      : mgrKnown
+        ? `<div style="color:var(--text2);font-size:11px;font-family:'Share Tech Mono',monospace">No manager sales in the window</div>`
+        : fallback.map((v, i) => `
+          <div class="modal-sale-row">
+            <span class="modal-sale-num">Sale ${i + 1}</span>
+            <span class="modal-sale-price">€${v.toFixed(2)}</span>
+          </div>`).join('')
+          + `<div style="color:var(--text2);font-size:10px;font-family:'Share Tech Mono',monospace;margin-top:6px">// all sale types, including Sorare offers</div>`;
 
     // Sparkline in modal (larger)
-    const points = [r.sale_5, r.sale_4, r.sale_3, r.sale_2, r.sale_1].filter(v => v != null && v > 0);
+    // Der Verlauf kommt aus der FMV-Historie (30 Tage), nicht mehr aus den letzten
+    // fuenf Verkaeufen: die lagen zeitlich beliebig weit auseinander und mischten
+    // Verkaufsarten, der "Trend" war dadurch Zufall (BUG-048).
+    document.getElementById('modal-chart').innerHTML =
+      `<span style="color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:11px">loading…</span>`;
+    loadHistory(r.player_slug, r.scarcity).then(hist => {
+      const el = document.getElementById('modal-chart');
+      if (!el) return;
+      const pts = (hist || []).map(h => Number(h.price)).filter(v => v > 0);
+      if (pts.length < 2) {
+        el.innerHTML = `<span style="color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:11px">Not enough history yet</span>`;
+        return;
+      }
+      const W = 420, H = 60;
+      const min = Math.min(...pts), max = Math.max(...pts), range = max - min || 1;
+      const coords = pts.map((v, i) => `${((i / (pts.length - 1)) * W).toFixed(1)},${(H - ((v - min) / range) * (H - 8) - 4).toFixed(1)}`);
+      const trend = pts[pts.length - 1] - pts[0];
+      const color = trend > 0 ? '#00ff88' : trend < 0 ? '#ff2d78' : '#8888b4';
+      const lastC = coords[coords.length - 1].split(',');
+      el.innerHTML = `
+        <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 4px ${color})">
+          <polyline points="${coords.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          <circle cx="${lastC[0]}" cy="${lastC[1]}" r="4" fill="${color}"/>
+        </svg>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);margin-top:6px">
+          ${pts.length} days · €${min.toFixed(2)} to €${max.toFixed(2)}</div>`;
+    });
+
+    const points = [];
     if (points.length >= 2) {
       const W = 420, H = 60;
       const min = Math.min(...points), max = Math.max(...points), range = max - min || 1;
