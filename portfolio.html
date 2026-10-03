@@ -2428,6 +2428,11 @@
       if (c && c.slug === slug && Date.now() - c.ts < 10 * 60 * 1000) return c;
     } catch {}
 
+    // 240 Seiten a 50 Karten = 12.000. Die alten 60 Seiten reichten fuer grosse
+    // Sammlungen nicht (Sorare-Konto mit 3.810 Limited). Eine Obergrenze bleibt,
+    // damit ein Fehler in der Blaetter-Logik nicht endlos laeuft.
+    const MS_MAX_PAGES = 240;
+    let truncated = false;
     const cards = [];
     for (const rarity of ['limited', 'rare', 'super_rare']) {
       let cursor = null, page = 0;
@@ -2456,7 +2461,11 @@
         if (onProgress) onProgress(cards.length);
         cursor = d?.pageInfo?.hasNextPage ? d.pageInfo.endCursor : null;
         page++;
-      } while (cursor && page < 60);
+      } while (cursor && page < MS_MAX_PAGES);
+      // Grenze erreicht und Sorare haette noch mehr: das Ergebnis ist unvollstaendig.
+      // Frueher wurde stillschweigend bei 3.000 Karten abgeschnitten (BUG-046):
+      // ein Manager mit 3.810 Limited bekam glatte "3000" angezeigt.
+      if (cursor) truncated = true;
     }
     if (!cards.length) throw new Error('no cards found — is the manager name correct?');
 
@@ -2474,7 +2483,7 @@
         if (Array.isArray(rows)) for (const r of rows) fmv[`${r.player_slug}_${rarity}_${r.eligibility ?? 'in_season'}`] = r;
       }
     }
-    const out = { slug, ts: Date.now(), cards, fmv };
+    const out = { slug, ts: Date.now(), cards, fmv, truncated };
     try { sessionStorage.setItem('sorion_ms_cache', JSON.stringify(out)); } catch {}
     return out;
   }
@@ -2516,7 +2525,7 @@
 
     document.getElementById('ms-result').innerHTML = `
       <div class="pm-grid">
-        <div class="pm-stat"><div class="pm-label">Cards</div><div class="pm-val">${data.cards.length} <span style="font-size:10px;color:var(--text2)">(${counts.limited}L·${counts.rare}R·${counts.super_rare}SR)</span></div></div>
+        <div class="pm-stat"><div class="pm-label">Cards</div><div class="pm-val">${data.truncated ? 'min. ' : ''}${data.cards.length} <span style="font-size:10px;color:var(--text2)">(${counts.limited}L·${counts.rare}R·${counts.super_rare}SR)</span></div></div>
         <div class="pm-stat"><div class="pm-label">Portfolio value</div><div class="pm-val">€${value.toFixed(0)}</div></div>
         <div class="pm-stat"><div class="pm-label">Invested</div><div class="pm-val">€${invested.toFixed(0)}</div></div>
         <div class="pm-stat"><div class="pm-label">P&amp;L since buy</div><div class="pm-val" style="color:${pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${pnl >= 0 ? '+' : '−'}€${Math.abs(pnl).toFixed(0)}${pnlPct != null ? ` (${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)` : ''}</div></div>
