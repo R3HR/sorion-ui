@@ -107,6 +107,14 @@
   .voucher a.dc:hover { box-shadow: 0 0 18px rgba(133,187,101,.5); transform: translateY(-1px); }
   @media (max-width: 620px) { .voucher a.dc { margin-left: 0; } }
   .comp { font-weight: 600; }
+  /* Erklaerungen beim Verweilen ueber Spaltenkoepfen (06.10.2026, Wunsch Jonas) */
+  th[data-tip] { text-decoration: underline dotted rgba(144,144,192,.55); text-underline-offset: 4px; }
+  .tip { position: fixed; z-index: 60; max-width: 300px; padding: 10px 12px; border-radius: 6px;
+         background: var(--surface2); border: 1px solid var(--purple); color: var(--text);
+         font-family: 'Exo 2', sans-serif; font-size: 12px; line-height: 1.5; letter-spacing: 0;
+         text-transform: none; font-weight: 400; box-shadow: 0 6px 24px rgba(0,0,0,.45);
+         pointer-events: none; opacity: 0; transition: opacity .12s; }
+  .tip.on { opacity: 1; }
   /* Liga in der Haupttabelle anklickbar: oeffnet ihre Top-Verdiener weiter unten */
   #tbody td.comp { cursor: pointer; }
   #tbody td.comp:hover { color: var(--purple); }
@@ -266,19 +274,19 @@
     <table aria-label="Reward thresholds per competition">
       <thead>
         <tr>
-          <th onclick="sortBy('comp')">Competition</th>
-          <th class="num" onclick="sortBy('gws')">GWs</th>
-          <th class="num sorted" onclick="sortBy('cash')">Cash from <span class="cash">pts</span><span class="pro-chip" id="cash-chip" style="display:none">PRO</span></th>
-          <th class="num" onclick="sortBy('cashCost')">Cash <span class="cash">team</span></th>
-          <th class="num" onclick="sortBy('costP20')">cheapest <span class="cash">20 %</span></th>
-          <th class="num" onclick="sortBy('costMin')">cheapest <span class="cash">winner</span></th>
-          <th class="num" onclick="sortBy('cashRank')">paid ranks</th>
-          <th class="num" onclick="sortBy('ess')">Essence from <span class="ess">pts</span></th>
-          <th class="num" onclick="sortBy('essCost')">Essence <span class="ess">team</span></th>
-          <th class="num" onclick="sortBy('essRank')">ranks</th>
-          <th class="num" onclick="sortBy('top')">Top score</th>
-          <th class="num" onclick="sortBy('lineups')">Lineups</th>
-          <th>Cash trend</th>
+          <th data-tip="The Sorare competition. Click a name to see who earned the most in it, further down the page." onclick="sortBy('comp')">Competition</th>
+          <th data-tip="How many closed gameweeks of this season the numbers are based on. More gameweeks means more reliable numbers." class="num" onclick="sortBy('gws')">GWs</th>
+          <th data-tip="The score of the last manager who still won USD, averaged over the season. Score more than this and you were in the money. In brackets: lowest and highest week." class="num sorted" onclick="sortBy('cash')">Cash from <span class="cash">pts</span><span class="pro-chip" id="cash-chip" style="display:none">PRO</span></th>
+          <th data-tip="What a lineup that won USD typically costs: the median of all cash-winning lineups, every card priced at today's market value." class="num" onclick="sortBy('cashCost')">Cash <span class="cash">team</span></th>
+          <th data-tip="One in five lineups that won USD cost this much or less. A realistic budget for a cheap entry." class="num" onclick="sortBy('costP20')">cheapest <span class="cash">20 %</span></th>
+          <th data-tip="The single cheapest lineup that won USD this season. Possible on a good weekend, not something to plan with." class="num" onclick="sortBy('costMin')">cheapest <span class="cash">winner</span></th>
+          <th data-tip="How deep the USD prizes go: on average, the top this many lineups got paid." class="num" onclick="sortBy('cashRank')">paid ranks</th>
+          <th data-tip="The score of the last manager who still received essence, averaged over the season. In brackets: lowest and highest week." class="num" onclick="sortBy('ess')">Essence from <span class="ess">pts</span></th>
+          <th data-tip="What a lineup that won essence typically costs: the median, every card priced at today's market value." class="num" onclick="sortBy('essCost')">Essence <span class="ess">team</span></th>
+          <th data-tip="How deep the essence prizes go: on average, the top this many lineups received essence." class="num" onclick="sortBy('essRank')">ranks</th>
+          <th data-tip="The score that finished first, averaged over the season." class="num" onclick="sortBy('top')">Top score</th>
+          <th data-tip="How many lineups entered per gameweek on average. More lineups means more competition." class="num" onclick="sortBy('lineups')">Lineups</th>
+          <th data-tip="How the score needed for USD moved from gameweek to gameweek, oldest on the left.">Cash trend</th>
         </tr>
       </thead>
       <tbody id="tbody"><tr><td colspan="13" class="empty">// loading…</td></tr></tbody>
@@ -302,13 +310,13 @@
     <table aria-label="Top earners per competition" style="min-width:640px">
       <thead>
         <tr>
-          <th class="num">#</th>
-          <th>Player</th>
-          <th>Club</th>
-          <th class="num">winning lineups</th>
-          <th class="num">GWs</th>
-          <th class="num">points</th>
-          <th class="num" id="earn-th">earned</th>
+          <th data-tip="Rank by earnings in this competition and rarity." class="num">#</th>
+          <th data-tip="Click a name to open the player on Sorare.">Player</th>
+          <th data-tip="The club he scored these points for. Players who moved since show the club they earned with.">Club</th>
+          <th data-tip="How many lineups that won a prize had this player in them." class="num">winning lineups</th>
+          <th data-tip="In how many gameweeks he was part of a winning lineup." class="num">GWs</th>
+          <th data-tip="His SO5 points in those winning lineups, bonuses included." class="num">points</th>
+          <th data-tip="His share of the prizes. Every winning lineup's reward is split across its cards by share of the points: 80 of 400 points means 20 % of the prize." class="num" id="earn-th">earned</th>
         </tr>
       </thead>
       <tbody id="earn-body"><tr><td colspan="7" class="empty">// loading…</td></tr></tbody>
@@ -522,6 +530,39 @@
       more.style.display = 'none';
     }
   }
+
+  // Spaltenerklaerung nach kurzem Verweilen (data-tip am Spaltenkopf). Ein Element fuer alle,
+  // unter dem Kopf ausgerichtet und am Bildrand eingefangen. Verschwindet beim Wegbewegen,
+  // Klicken (Sortieren) und Scrollen.
+  (() => {
+    const tip = document.createElement('div');
+    tip.className = 'tip'; tip.setAttribute('role', 'tooltip');
+    document.body.appendChild(tip);
+    let timer = null, cur = null;
+    const hide = () => { clearTimeout(timer); timer = null; cur = null; tip.classList.remove('on'); };
+    const show = th => {
+      tip.textContent = th.dataset.tip;
+      tip.style.left = '0px'; tip.style.top = '0px';
+      const r = th.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+      let x = r.left + r.width / 2 - w / 2;
+      x = Math.max(8, Math.min(x, innerWidth - w - 8));
+      let y = r.bottom + 8;
+      if (y + h > innerHeight - 8) y = r.top - h - 8;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+      tip.classList.add('on');
+    };
+    document.addEventListener('mouseover', e => {
+      const th = e.target.closest('th[data-tip]');
+      if (th === cur) return;
+      hide();
+      if (!th) return;
+      cur = th;
+      timer = setTimeout(() => show(th), 450);
+    });
+    document.addEventListener('mouseleave', hide);
+    document.addEventListener('click', hide, true);
+    addEventListener('scroll', hide, { passive: true });
+  })();
 
   // Klick auf eine Liga in der Haupttabelle: Dropdown setzen und hinspringen
   document.getElementById('tbody').addEventListener('click', e => {
