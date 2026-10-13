@@ -2452,12 +2452,28 @@
     for (const rarity of ['limited', 'rare', 'super_rare']) {
       let cursor = null, page = 0;
       do {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/sorare-oauth`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY },
-          body: JSON.stringify({ action: 'user_cards', slug, rarity, cursor }),
-        });
-        const d = await res.json();
+        // Eine Sammlung wie 3.810 Limited braucht 77 Abrufe hintereinander. Faellt
+        // EINER davon aus, war vorher die ganze Suche hin: Die Edge Function
+        // antwortet dann mit Klartext ("Network connection lost."), und
+        // res.json() warf "Unexpected token 'N'" (BUG-049). Deshalb: Antwort
+        // defensiv lesen und voruebergehende Aussetzer bis zu dreimal wiederholen.
+        let d = null, lastErr = null;
+        for (let versuch = 0; versuch < 3; versuch++) {
+          if (versuch) await new Promise(r => setTimeout(r, 400 * versuch));
+          try {
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/sorare-oauth`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY },
+              body: JSON.stringify({ action: 'user_cards', slug, rarity, cursor }),
+            });
+            const text = await res.text();
+            try { d = JSON.parse(text); }
+            catch { lastErr = text.slice(0, 80); d = null; continue; }   // kein JSON: Aussetzer
+            break;
+          } catch (e) { lastErr = e.message; d = null; }
+        }
+        if (!d) throw new Error('Sorare did not respond, please try again in a moment.'
+          + (lastErr ? ` (${String(lastErr).replace(/[<>]/g, '')})` : ''));
         // Nur ein echtes "not found" als solches melden; Zeitueberschreitung oder
         // Drosselung bei Sorare sahen frueher genauso aus.
         if (d.error) throw new Error(/not found/i.test(String(d.error))
