@@ -42,3 +42,6 @@ jobs:
             git commit -m "Statische Zahlen aktualisiert ($(date -u +%F))"
             git push
           fi
+
+      - name: Suchmaschinen benachrichtigen (IndexNow)
+        run: node tools/indexnow.mjs
