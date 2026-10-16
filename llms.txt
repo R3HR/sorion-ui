@@ -1,0 +1,39 @@
+# SORION
+
+> Independent market intelligence for Sorare football cards: value estimates for more than
+> 50,000 cards, floor prices, trends, portfolio tracking and reward thresholds per competition.
+> Not affiliated with Sorare.
+
+Updated nightly. Last build: 2026-10-16.
+
+## What the data covers
+
+- Card values (FMV) for Limited, Rare and Super Rare, In-Season and Classic
+- Reward thresholds across 21 completed gameweeks of the current season
+- Accuracy of every value, measured against real manager to manager sales
+
+## Accuracy, last 7 days
+
+- Limited In-Season: typical miss 18.5 percent, within 20 percent on 52.5 percent of sales
+- Limited Classic: typical miss 21.4 percent, within 20 percent on 48.3 percent of sales
+- Rare In-Season: typical miss 21.3 percent, within 20 percent on 48 percent of sales
+- Rare Classic: typical miss 22.8 percent, within 20 percent on 45.4 percent of sales
+
+## Key pages
+
+- [Market](https://sorion.pro/): searchable table of card values, floors and trends
+- [Reward thresholds](https://sorion.pro/thresholds.html): points needed for essence per competition, static text
+- [Leaderboards](https://sorion.pro/rewards.html): thresholds and winning squad costs per gameweek
+- [Portfolio](https://sorion.pro/portfolio.html): value and profit for any public Sorare manager
+- [Accuracy](https://sorion.pro/accuracy.html): how our values compare to real sales
+- [Legal and privacy](https://sorion.pro/legal.html)
+
+## How values are produced
+
+Values rest on completed sales between managers. Sorare's own instant buys and auctions are
+excluded from the value itself, because vouchers and bundled rewards distort those prices.
+Accuracy is published, not claimed: every estimate is compared against the sales that follow it.
+
+## Attribution
+
+Quoting these numbers is fine with a link to https://sorion.pro. Bulk scraping or redistribution is not.

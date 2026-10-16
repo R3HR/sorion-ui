@@ -1,0 +1,44 @@
+name: Statische Seiten neu erzeugen
+
+# Die Zahlen auf thresholds.html, in sitemap.xml und llms.txt stehen als FESTER
+# Text im Repo, damit Suchmaschinen und Antwortmaschinen sie ohne JavaScript
+# lesen koennen. Dieser Lauf zieht sie jede Nacht nach.
+#
+# 06:20 UTC: nach dem Updater-Fenster (22:00 bis 05:00) und nach den
+# Tages-Snapshots (05:30 und 05:45), siehe docs/HANDOFF.md im Hauptrepo.
+on:
+  schedule:
+    - cron: '20 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-static
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Seiten erzeugen
+        run: node tools/build-static.mjs
+
+      - name: Nur committen, wenn sich etwas geaendert hat
+        run: |
+          git config user.name  "sorion-bot"
+          git config user.email "bot@sorion.pro"
+          git add thresholds.html sitemap.xml llms.txt
+          if git diff --cached --quiet; then
+            echo "Keine Aenderung, nichts zu committen."
+          else
+            git commit -m "Statische Zahlen aktualisiert ($(date -u +%F))"
+            git push
+          fi

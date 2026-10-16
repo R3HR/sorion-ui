@@ -1,0 +1,10 @@
+# sorion.pro
+# Independent market intelligence for Sorare cards. Not affiliated with Sorare.
+
+User-agent: *
+Allow: /
+# Anmeldung und Rueckkehrseite gehoeren nicht in den Index.
+Disallow: /auth/
+Disallow: /profile.html
+
+Sitemap: https://sorion.pro/sitemap.xml
