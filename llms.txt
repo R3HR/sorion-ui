@@ -4,12 +4,12 @@
 > 50,000 cards, floor prices, trends, portfolio tracking and reward thresholds per competition.
 > Not affiliated with Sorare.
 
-Updated nightly. Last build: 2026-10-16.
+Updated nightly. Last build: 2026-10-17.
 
 ## What the data covers
 
 - Card values (FMV) for Limited, Rare and Super Rare, In-Season and Classic
-- Reward thresholds across 21 completed gameweeks of the current season
+- Reward thresholds across 22 completed gameweeks of the current season
 - Accuracy of every value, measured against real manager to manager sales
 
 ## Accuracy, last 7 days
