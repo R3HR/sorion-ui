@@ -4,7 +4,7 @@
 > 50,000 cards, floor prices, trends, portfolio tracking and reward thresholds per competition.
 > Not affiliated with Sorare.
 
-Updated nightly. Last build: 2026-10-19.
+Updated nightly. Last build: 2026-10-20.
 
 ## What the data covers
 
@@ -15,9 +15,9 @@ Updated nightly. Last build: 2026-10-19.
 ## Accuracy, last 7 days
 
 - Limited In-Season: typical miss 19.2 percent, within 20 percent on 51.6 percent of sales
-- Limited Classic: typical miss 21.4 percent, within 20 percent on 48.4 percent of sales
-- Rare In-Season: typical miss 20 percent, within 20 percent on 50.1 percent of sales
-- Rare Classic: typical miss 22.2 percent, within 20 percent on 46.7 percent of sales
+- Limited Classic: typical miss 21.6 percent, within 20 percent on 48.1 percent of sales
+- Rare In-Season: typical miss 19.5 percent, within 20 percent on 50.6 percent of sales
+- Rare Classic: typical miss 22.2 percent, within 20 percent on 46.5 percent of sales
 
 ## Key pages
 
