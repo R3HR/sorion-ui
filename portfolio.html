@@ -1235,7 +1235,10 @@
   // die Sperre haengt am Manager-Slug (max. 1 Abruf/24 h), der eigene Sync-Knopf
   // laeuft mit 10-Minuten-Cooldown. Vorher kostete JEDER Aufruf 6-16 Anfragen.
   let lastSyncedAt = null;
-  let accessHint = null;   // warum das Depot leer ist: Anmeldung oder Pro fehlt
+  // Seit 21.10.: die SAMMLUNG ist oeffentlich, nur die Geldzahlen haengen am Zugang.
+  // Der Server liefert Kaufpreise ohne Zugang gar nicht erst (null), die Kacheln
+  // werden zusaetzlich verdeckt, damit nicht 0 EUR wie eine Tatsache aussieht.
+  let moneyLocked = false;
 
   // SEC-006: Manager-Daten laufen jetzt über RPCs mit dem NUTZER-Token.
   // Der anon-Key genügt nicht mehr — die Tabellen selbst sind gesperrt.
@@ -1274,14 +1277,9 @@
       if (batch.length < PAGE) break;
     }
     lastSyncedAt = sync?.synced_at ?? null;
-    // Leer UND kein Zugang: das ist kein fehlendes Depot, sondern eine Sperre.
-    // Seit dem 13.10. liefern die Manager-RPCs nur dem eigenen Konto und Pro-Nutzern
-    // Daten (Schutz vor Massenabzug). Ohne Hinweis sieht das aus wie ein Ausfall.
-    if (!rows.length) {
-      accessHint = signedIn
-        ? 'This manager is only visible with Pro. Your own portfolio always works.'
-        : 'Sign in to see your portfolio. Other managers need Pro.';
-    } else accessHint = null;
+    // Eigener Manager oder Pro? Die RPC gibt nur ueber die Rechte des Aufrufers
+    // Auskunft, nicht ueber fremde Daten.
+    moneyLocked = (await rpcAuth('may_view_manager', { p_slug: slug })) !== true;
     return rows.map(r => ({
       slug: r.card_slug,
       rarityTyped: r.rarity,
@@ -2163,10 +2161,7 @@
     const grid = document.getElementById('cards-grid');
 
     if (!filtered.length) {
-      grid.innerHTML = accessHint
-        ? `<div class="empty" style="grid-column:1/-1">// ${esc(accessHint)}<br>
-             <a href="profile.html" style="color:#b060ff">Sign in</a></div>`
-        : `<div class="empty" style="grid-column:1/-1">// No cards found</div>`;
+      grid.innerHTML = `<div class="empty" style="grid-column:1/-1">// No cards found</div>`;
       return;
     }
 
@@ -2246,6 +2241,23 @@
         if (v) { pnl += sv - buy; pnlBasis += buy; valBought += v; fees += v - sv; }
         else   { buyNoPrice += buy; nNoPrice++; }
       } else if (v) { valFree += v; nFree++; }
+    }
+
+    // Ohne Zugang: Platzhalter statt Zahlen. Die Kaufpreise fehlen serverseitig,
+    // "Invested 0" waere schlicht falsch, und der Depotwert bleibt Pro vorbehalten.
+    if (moneyLocked) {
+      const lock = (id, txt) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = `<span class="lockv">${txt}</span> <span style="font-size:13px">&#128274;</span>`;
+      };
+      lock('stat-value', '&euro;000');
+      lock('stat-invested', '&euro;0000');
+      lock('stat-pnl', '&euro;-000 (-00%)');
+      const vs = document.getElementById('stat-value-sub');
+      if (vs) vs.innerHTML = '<a href="#" onclick="openSupport();return false" class="earn-upsell">Pro feature</a>';
+      const ps = document.getElementById('stat-pnl-sub');
+      if (ps) ps.textContent = '';
+      return;
     }
 
     document.getElementById('stat-value').textContent =
