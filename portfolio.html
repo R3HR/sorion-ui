@@ -1235,18 +1235,23 @@
   // die Sperre haengt am Manager-Slug (max. 1 Abruf/24 h), der eigene Sync-Knopf
   // laeuft mit 10-Minuten-Cooldown. Vorher kostete JEDER Aufruf 6-16 Anfragen.
   let lastSyncedAt = null;
+  let accessHint = null;   // warum das Depot leer ist: Anmeldung oder Pro fehlt
 
   // SEC-006: Manager-Daten laufen jetzt über RPCs mit dem NUTZER-Token.
   // Der anon-Key genügt nicht mehr — die Tabellen selbst sind gesperrt.
   // Die RPC entscheidet: eigener Manager immer, fremder nur mit Pro-Tier.
-  function userHeaders() {
-    let s = null;
-    try { s = JSON.parse(localStorage.getItem('sorion_session') || 'null'); } catch {}
-    return { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + (s?.access_token || ANON_KEY) };
+  // Das gespeicherte Token wird ERNEUERT, falls es abgelaufen ist. Ohne das wirkt
+  // ein eingeloggter Nutzer fuer die RPC wie ein Gast: sie liefert dann eine leere
+  // Liste, und das Portfolio bleibt kommentarlos leer (BUG-050, dieselbe Falle wie
+  // am 06.09. auf der Leaderboards-Seite).
+  async function userHeaders() {
+    const tok = await authToken();          // erneuert bei Bedarf, null = nicht angemeldet
+    return { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + (tok || ANON_KEY), _signedIn: !!tok };
   }
 
   async function loadFromDb(slug) {
-    const H = userHeaders();
+    const H = await userHeaders();
+    const signedIn = H._signedIn; delete H._signedIn;
     const syncRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/manager_sync_for?p_slug=${encodeURIComponent(slug)}&select=synced_at,card_count`, { headers: H });
     const sync = syncRes.ok ? (await syncRes.json())[0] : null;
 
@@ -1269,6 +1274,14 @@
       if (batch.length < PAGE) break;
     }
     lastSyncedAt = sync?.synced_at ?? null;
+    // Leer UND kein Zugang: das ist kein fehlendes Depot, sondern eine Sperre.
+    // Seit dem 13.10. liefern die Manager-RPCs nur dem eigenen Konto und Pro-Nutzern
+    // Daten (Schutz vor Massenabzug). Ohne Hinweis sieht das aus wie ein Ausfall.
+    if (!rows.length) {
+      accessHint = signedIn
+        ? 'This manager is only visible with Pro. Your own portfolio always works.'
+        : 'Sign in to see your portfolio. Other managers need Pro.';
+    } else accessHint = null;
     return rows.map(r => ({
       slug: r.card_slug,
       rarityTyped: r.rarity,
@@ -2150,7 +2163,10 @@
     const grid = document.getElementById('cards-grid');
 
     if (!filtered.length) {
-      grid.innerHTML = `<div class="empty" style="grid-column:1/-1">// No cards found</div>`;
+      grid.innerHTML = accessHint
+        ? `<div class="empty" style="grid-column:1/-1">// ${esc(accessHint)}<br>
+             <a href="profile.html" style="color:#b060ff">Sign in</a></div>`
+        : `<div class="empty" style="grid-column:1/-1">// No cards found</div>`;
       return;
     }
 
