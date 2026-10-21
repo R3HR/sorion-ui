@@ -2245,24 +2245,29 @@
 
     // Ohne Zugang: Platzhalter statt Zahlen. Die Kaufpreise fehlen serverseitig,
     // "Invested 0" waere schlicht falsch, und der Depotwert bleibt Pro vorbehalten.
+    // Der Depotwert ist fuer JEDEN sichtbar (Vorgabe Jonas 21.10.): Er ergibt sich
+    // ohnehin aus der oeffentlichen Sammlung und unseren oeffentlichen Preisen,
+    // ihn zu verdecken waere Theater. Geschuetzt bleiben die Zahlen, die wirklich
+    // nur den Besitzer angehen: Einstand, Gewinn und Verlust, Ertraege.
+    document.getElementById('stat-value').textContent =
+      total > 0 ? `€${total.toFixed(0)}` : '—';
+    const vSub = document.getElementById('stat-value-sub');
+
     if (moneyLocked) {
+      // Die Aufteilung "gekauft gegen gratis" braucht die Kaufpreise, die der
+      // Server ohne Zugang nicht liefert. Lieber nichts zeigen als 0 EUR.
+      if (vSub) vSub.innerHTML = '<a href="#" onclick="openSupport();return false" class="earn-upsell">Pro: invested and P&amp;L</a>';
       const lock = (id, txt) => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = `<span class="lockv">${txt}</span> <span style="font-size:13px">&#128274;</span>`;
       };
-      lock('stat-value', '&euro;000');
       lock('stat-invested', '&euro;0000');
       lock('stat-pnl', '&euro;-000 (-00%)');
-      const vs = document.getElementById('stat-value-sub');
-      if (vs) vs.innerHTML = '<a href="#" onclick="openSupport();return false" class="earn-upsell">Pro feature</a>';
       const ps = document.getElementById('stat-pnl-sub');
       if (ps) ps.textContent = '';
       return;
     }
 
-    document.getElementById('stat-value').textContent =
-      total > 0 ? `€${total.toFixed(0)}` : '—';
-    const vSub = document.getElementById('stat-value-sub');
     if (vSub) vSub.textContent = total > 0
       ? `€${valBought.toFixed(0)} bought · €${valFree.toFixed(0)} free (${nFree} rewards/crafts)`
       : '';
