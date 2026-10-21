@@ -4,20 +4,20 @@
 > 50,000 cards, floor prices, trends, portfolio tracking and reward thresholds per competition.
 > Not affiliated with Sorare.
 
-Updated nightly. Last build: 2026-10-20.
+Updated nightly. Last build: 2026-10-21.
 
 ## What the data covers
 
 - Card values (FMV) for Limited, Rare and Super Rare, In-Season and Classic
-- Reward thresholds across 22 completed gameweeks of the current season
+- Reward thresholds across 23 completed gameweeks of the current season
 - Accuracy of every value, measured against real manager to manager sales
 
 ## Accuracy, last 7 days
 
-- Limited In-Season: typical miss 19.2 percent, within 20 percent on 51.6 percent of sales
-- Limited Classic: typical miss 21.6 percent, within 20 percent on 48.1 percent of sales
-- Rare In-Season: typical miss 19.5 percent, within 20 percent on 50.6 percent of sales
-- Rare Classic: typical miss 22.2 percent, within 20 percent on 46.5 percent of sales
+- Limited In-Season: typical miss 19 percent, within 20 percent on 51.9 percent of sales
+- Limited Classic: typical miss 21.6 percent, within 20 percent on 48 percent of sales
+- Rare In-Season: typical miss 20 percent, within 20 percent on 50 percent of sales
+- Rare Classic: typical miss 22.4 percent, within 20 percent on 46.9 percent of sales
 
 ## Key pages
 
