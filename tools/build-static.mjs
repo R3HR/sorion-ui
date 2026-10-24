@@ -115,7 +115,10 @@ const html = `<!DOCTYPE html>
 <style>
   :root { --bg:#0d0d1a; --surface:#13131f; --border:#2a2a45; --purple:#b060ff; --text:#e8e8ff; --text2:#9090c0; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:'Exo 2',sans-serif; line-height:1.65; padding:28px 18px 60px; }
+  body { background:var(--bg); color:var(--text); font-family:'Exo 2',sans-serif; line-height:1.65; padding:0 0 60px; }
+  /* Seitenrand liegt am Inhalt, nicht am body: sonst sass die gemeinsame Kopfzeile
+     hier 18 px weiter rechts und 28 px tiefer als ueberall sonst. */
+  body > :not(script):not(style):not(.sx-head-outer) { margin-left:18px; margin-right:18px; }
   .wrap { max-width: 980px; margin: 0 auto; }
   h1 { font-family:'Orbitron',monospace; font-size:26px; margin-bottom:10px; }
   h2 { font-family:'Orbitron',monospace; font-size:18px; margin:34px 0 12px; color:var(--purple); }
@@ -133,6 +136,7 @@ const html = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<script src="site-header.js"></script>
 <div class="wrap">
   <div class="nav"><a href="/">Market</a><a href="/portfolio.html">Portfolio</a><a href="/rewards.html">Leaderboards</a><a href="/accuracy.html">Accuracy</a></div>
 

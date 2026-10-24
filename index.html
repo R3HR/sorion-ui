@@ -1332,6 +1332,7 @@
 </style>
 </head>
 <body>
+<script src="site-header.js"></script>
 <div class="bottom-glow"></div>
 
 <!-- Player Modal -->
@@ -1367,21 +1368,6 @@
 </div>
 
 <div class="wrap">
-  <header>
-    <div class="logo">
-      <div class="logo-mark">SORION<span class="logo-cursor">_</span></div>
-      <div class="logo-sub">// Market Intelligence</div>
-    </div>
-    <nav class="nav-links">
-      <a class="nav-link" href="#">Market</a>
-      <a class="nav-link" href="rewards.html">Leaderboards</a>
-      <a class="nav-link" href="thresholds.html">Thresholds</a>
-      <a class="nav-link" href="#" onclick="openManagerSearch();return false;">Manager Search</a>
-      <a class="nav-link" href="https://craftlog.pro">Craft_LOG</a>
-      <button class="nav-support" type="button" onclick="openSupport()" title="Support SORION">☕ Support</button>
-      <a class="nav-cta" href="profile.html" id="btn-profile">◉ Profile</a>
-    </nav>
-  </header>
 
   <div class="top-grid">
    <div class="top-main">
@@ -3163,6 +3149,14 @@
     inp.focus(); inp.select();
   }
   function closeManagerSearch() { document.getElementById('ms-backdrop').style.display = 'none'; }
+  // Die gemeinsame Kopfzeile schickt Besucher von Seiten ohne Suchfenster mit
+  // ?search=1 hierher. Dann direkt oeffnen und den Parameter wieder entfernen.
+  if (new URLSearchParams(location.search).get('search') === '1') {
+    window.addEventListener('DOMContentLoaded', () => {
+      openManagerSearch();
+      history.replaceState(null, '', location.pathname);
+    });
+  }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeManagerSearch(); });
 
 
