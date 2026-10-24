@@ -74,7 +74,10 @@
     '  background:none;border:0;cursor:pointer;transition:color .2s}',
     '.sx-link:hover{color:#b060ff}',
     '.sx-link.sx-active{color:#e8e8ff}',
-    '.sx-support{font-family:"Share Tech Mono",monospace;font-size:12px;letter-spacing:.1em;',
+    // Alles ausdruecklich setzen: profile.html gestaltet `button` global (12 px
+    // Abstand oben, andere Schrift) und machte die Kopfzeile dort 12 px hoeher.
+    '.sx-support{margin:0;width:auto;display:inline-block;font-weight:400;line-height:1.2;filter:none;',
+    '  font-family:"Share Tech Mono",monospace;font-size:12px;letter-spacing:.1em;',
     '  text-transform:uppercase;cursor:pointer;color:#b060ff;background:rgba(176,96,255,.10);',
     '  border:1px solid rgba(176,96,255,.55);border-radius:6px;padding:10px 16px;white-space:nowrap;transition:all .15s}',
     '.sx-support:hover{background:#b060ff;color:#0d0d1a;border-color:#b060ff;',
