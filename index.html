@@ -1270,6 +1270,7 @@
   .vol-tabs { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; }
   .vol-tab { padding: 4px 11px; font-size: 10.5px; }
   .vol-bars { display: flex; align-items: flex-end; gap: 3px; height: 64px; }
+  .vol-bars .vol-bar { max-width: 44px; }
   .vol-bar { flex: 1 1 0; min-width: 3px; position: relative; background: rgba(176,96,255,.32); border-radius: 2px 2px 0 0; }
   .vol-bar .mgr { position: absolute; left: 0; right: 0; bottom: 0; background: var(--purple); border-radius: 2px 2px 0 0; }
   .vol-bar.open { background: repeating-linear-gradient(45deg, rgba(176,96,255,.30) 0 3px, transparent 3px 6px); }
@@ -2014,24 +2015,29 @@
         : 'Collection starts with the next market update.';
     }
 
-    // ── Balken: Tage, Wochen oder Monate bis zum laufenden Zeitraum ──────────
-    const yesterday = vAdd(vDay(), -1);
+    // ── Balken: Tage, Wochen oder Monate bis HEUTE ───────────────────────────
+    // Der laufende Zeitraum ist immer dabei (schraffiert), damit man sieht, dass
+    // gezaehlt wird. Erste Fassung endete bei gestern und warf alles vor dem
+    // Erhebungsbeginn weg: am ersten Tag blieb so kein einziger Balken (Jonas 13.11.).
+    const todayB = vDay();
     const periods = [];
     for (let i = cfg.bars - 1; i >= 0; i--) {
       let ps, pe, name;
-      if (cfg.gran === 'day')       { ps = pe = vAdd(yesterday, -i); name = vFmt(ps); }
-      else if (cfg.gran === 'week') { ps = vAdd(vWeekStart(yesterday), -7 * i); pe = vAdd(ps, 6); name = 'Week of ' + vFmt(ps); }
-      else                          { ps = vMonthAdd(yesterday, -i); pe = vMonthEnd(ps);
+      if (cfg.gran === 'day')       { ps = pe = vAdd(todayB, -i); name = vFmt(ps); }
+      else if (cfg.gran === 'week') { ps = vAdd(vWeekStart(todayB), -7 * i); pe = vAdd(ps, 6); name = 'Week of ' + vFmt(ps); }
+      else                          { ps = vMonthAdd(todayB, -i); pe = vMonthEnd(ps);
                                       name = new Date(ps + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }); }
-      // Zeitraeume vor Erhebungsbeginn weglassen; der Tag davor ist der (teilweise) erste Schreibtag
-      if (start && pe < vAdd(start, -1)) continue;
       periods.push({ ps, pe, name });
     }
-    const filled = periods.map(pr => ({ ...pr, ...sumWin(pr.ps, pr.pe), done: !!start && pr.ps >= start && pr.pe <= lastDone }));
-    if (!filled.some(pr => pr.v > 0)) {
+    const all = periods.map(pr => ({ ...pr, ...sumWin(pr.ps, pr.pe), done: !!start && pr.ps >= start && pr.pe <= lastDone }));
+    // Leere Zeitraeume VOR den ersten Daten abschneiden: sonst stuenden anfangs 26 leere
+    // Plaetze neben zwei winzigen Balken. Luecken mittendrin bleiben sichtbar.
+    const firstIdx = all.findIndex(pr => pr.v > 0);
+    if (firstIdx < 0) {
       chartEl.innerHTML = '<div class="vol-empty">// bars appear here as data comes in</div>';
       return;
     }
+    const filled = all.slice(firstIdx);
     const max = Math.max(...filled.map(pr => pr.v), 1);
     const bars = filled.map(pr => {
       if (!(pr.v > 0)) return `<div class="vol-bar" style="height:0" title="${pr.name}: no data"></div>`;
@@ -2045,7 +2051,7 @@
       + '<span class="vol-key" style="background:var(--purple)"></span>manager-to-manager'
       + '<span class="vol-key" style="background:repeating-linear-gradient(45deg,rgba(176,96,255,.5) 0 2px,transparent 2px 4px)"></span>incomplete';
     chartEl.innerHTML = `<div class="vol-bars">${bars}</div>`
-      + `<div class="vol-axis"><span>${filled[0].name}</span><span>${legend}</span><span>${filled[filled.length - 1].name}</span></div>`;
+      + `<div class="vol-axis"><span>${filled.length > 1 ? `${filled[0].name} to ${filled[filled.length - 1].name}` : filled[0].name}</span><span>${legend}</span></div>`;
   }
 
   async function updateHeroStats() {
