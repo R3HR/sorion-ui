@@ -1939,7 +1939,7 @@
   const VOL_VIEWS = {
     '7d':  { n: 7,   gran: 'day',   bars: 28, name: '7 days',    chip: '7d',  days: 42  },
     '30d': { n: 30,  gran: 'mday',  bars: 40, name: 'month',     chip: 'mtd', days: 80, mtd: true },
-    '1y':  { n: 365, gran: 'month', bars: 12, name: '12 months', chip: '12m', days: 760 },
+    '1y':  { n: 365, gran: 'month', bars: 13, name: '12 months', chip: '12m', days: 760 },   // 13: Nov 2025 bis Nov 2026 (Jonas)
   };
   let volView = (() => { try { return localStorage.getItem('sorion_vol_view') || '7d'; } catch { return '7d'; } })();
   if (!VOL_VIEWS[volView]) volView = '7d';
@@ -1974,11 +1974,16 @@
     box.hidden = false;
 
     const label = elig === 'classic' ? 'Classic' : 'In-Season';
-    const lag = elig === 'classic' ? 8 : 2;                   // Tag D ist ab D+lag vollstaendig
-    const lastDone = vAdd(vDay(), -lag);                      // juengster vollstaendiger Tag
     document.getElementById('vol-label').textContent = `// Trading Volume \u00b7 ${label} \u00b7 last ${cfg.name}`;
     const byDay = new Map(rows.map(r => [String(r.day).slice(0, 10), r]));
-    const start = rows.length ? String(rows[0].start_day).slice(0, 10) : null;
+    // Seit 13.11. kommt alles aus Sorares Verkaufshistorie, die sofort vollstaendig ist.
+    // Welche Tage fertig sind, sagt die Datenbank (`complete` = Auftrag abgeschlossen),
+    // nicht mehr ein angenommener Erfassungsverzug. lastDone = juengster fertige Tag,
+    // start = fruehester Tag der lueckenlosen fertigen Strecke bis dorthin.
+    const doneSet = new Set(rows.filter(r => r.complete).map(r => String(r.day).slice(0, 10)));
+    const lastDone = doneSet.size ? [...doneSet].sort().pop() : null;
+    let start = lastDone;
+    while (start && doneSet.has(vAdd(start, -1))) start = vAdd(start, -1);
     const valEl = document.getElementById('vol-value'), chipEl = document.getElementById('vol-chip');
     const subEl = document.getElementById('vol-sub'), chartEl = document.getElementById('vol-chart');
 
@@ -1998,7 +2003,11 @@
     // dessen Name da. Balken und Kopfzahl beschreiben so dieselben Tage.
     const N = cfg.n;
     const monthName = (d, len) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { month: len });
-    if (cfg.mtd) {
+    if (!lastDone) {
+      valEl.textContent = '\u2014';
+      chipEl.innerHTML = '';
+      subEl.textContent = 'Market history is loading. Figures appear as soon as this period is complete.';
+    } else if (cfg.mtd) {
       const ms = vMonthStart(lastDone);
       const isCurrent = ms === vMonthStart(vDay());
       document.getElementById('vol-label').textContent =
@@ -2019,13 +2028,9 @@
           chipEl.innerHTML = '';
         }
       } else {
-        // Erster voller Monat = der erste, der am 1. schon erfasst wurde.
-        const fm = start ? (start.slice(8) === '01' ? start : vMonthAdd(start, 1)) : null;
         valEl.textContent = '\u2014';
         chipEl.innerHTML = '';
-        subEl.textContent = fm
-          ? `Collecting since ${vFmt(start)}. First monthly figure on ${vFmt(vAdd(fm, lag))}, first comparison on ${vFmt(vAdd(vMonthAdd(fm, 1), lag))}.`
-          : 'Collection starts with the next market update.';
+        subEl.textContent = 'Market history is loading. Figures appear as soon as this period is complete.';
       }
     } else if (start && vAdd(lastDone, -(N - 1)) >= start) {
       const from = vAdd(lastDone, -(N - 1));
@@ -2041,12 +2046,10 @@
         chipEl.innerHTML = '';
       }
     } else {
-      // Erhebung laeuft erst: ehrlich sagen, ab wann es Zahlen gibt, statt Teilwerte zu zeigen.
+      // Historie fuer dieses Fenster noch nicht komplett: keine Teilwerte als Kopfzahl.
       valEl.textContent = '\u2014';
       chipEl.innerHTML = '';
-      subEl.textContent = start
-        ? `Collecting since ${vFmt(start)}. First ${cfg.name} total on ${vFmt(vAdd(start, N - 1 + lag))}, first comparison on ${vFmt(vAdd(start, 2 * N - 1 + lag))}.`
-        : 'Collection starts with the next market update.';
+      subEl.textContent = 'Market history is loading. Figures appear as soon as this period is complete.';
     }
 
     // ── Balken: Tage, Wochen oder Monate bis HEUTE ───────────────────────────
@@ -2079,7 +2082,9 @@
       chartEl.innerHTML = '<div class="vol-empty">// bars appear here as data comes in</div>';
       return;
     }
-    const filled = all.slice(firstIdx);
+    let lastIdx = all.length - 1;
+    while (lastIdx > firstIdx && !(all[lastIdx].v > 0)) lastIdx--;   // laufender Tag noch nicht gezaehlt
+    const filled = all.slice(firstIdx, lastIdx + 1);
     const max = Math.max(...filled.map(pr => pr.v), 1);
     const bars = filled.map(pr => {
       if (!(pr.v > 0)) return `<div class="vol-bar" style="height:0" title="${pr.name}: no data"></div>`;
