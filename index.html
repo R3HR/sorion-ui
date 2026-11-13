@@ -1263,6 +1263,8 @@
      ganzen Markt beschreibt und nicht einzelne Karten. */
   .vol-strip { margin-bottom: 14px; display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: center; }
   .vol-strip[hidden] { display: none; }
+  .vol-tabs { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; }
+  .vol-tab { padding: 4px 11px; font-size: 10.5px; }
   .vol-bars { display: flex; align-items: flex-end; gap: 3px; height: 64px; }
   .vol-bar { flex: 1 1 0; min-width: 3px; position: relative; background: rgba(176,96,255,.32); border-radius: 2px 2px 0 0; }
   .vol-bar .mgr { position: absolute; left: 0; right: 0; bottom: 0; background: var(--purple); border-radius: 2px 2px 0 0; }
@@ -1392,7 +1394,14 @@
       </div>
       <div class="hero-stat-sub" id="vol-sub" style="margin-top:4px"></div>
     </div>
-    <div id="vol-chart"></div>
+    <div>
+      <div class="vol-tabs">
+        <button class="filter-btn vol-tab active" data-v="7d"  onclick="setVolView('7d')">7D</button>
+        <button class="filter-btn vol-tab"        data-v="30d" onclick="setVolView('30d')">30D</button>
+        <button class="filter-btn vol-tab"        data-v="1y"  onclick="setVolView('1y')">1Y</button>
+      </div>
+      <div id="vol-chart"></div>
+    </div>
   </div>
 
   <div class="top-grid">
@@ -1916,28 +1925,55 @@
   // ── Marktvolumen (Streifen ganz oben) ────────────────────────────────────
   // Quelle: market_volume_daily, vom Updater je Lauf geschrieben: ALLE neuen
   // Verkaeufe, nicht die auf 5 je Lauf gekappten aus fmv_accuracy.
-  // Gerechnet wird nur mit VOLLSTAENDIGEN Tagen (Feld `complete`): Classic-Verkaeufe
-  // landen erst bis zu 7 Tage spaeter bei uns. Ohne diese Regel zeigte der rechte
-  // Rand jeder Kurve einen Einbruch, den es nicht gibt.
+  // Gerechnet wird nur mit VOLLSTAENDIGEN Tagen: Classic-Verkaeufe landen erst bis
+  // zu 7 Tage spaeter bei uns (Tag D zaehlt ab D+8, in-season ab D+2, deckungsgleich
+  // mit `complete` aus der RPC). Ohne diese Regel endete jede Kurve in einem Einbruch,
+  // den es nicht gibt. Wochen und Monate zaehlen erst, wenn ihr letzter Tag zaehlt.
+  // Schalter 7D / 30D / 1Y (Jonas 13.11.): rollierende Fenster, damit der Vergleich
+  // mit dem Zeitraum davor immer gleich lange Strecken gegenueberstellt.
+  const VOL_VIEWS = {
+    '7d':  { n: 7,   gran: 'day',   bars: 28, name: '7 days',    chip: '7d',  days: 42  },
+    '30d': { n: 30,  gran: 'week',  bars: 26, name: '30 days',   chip: '30d', days: 200 },
+    '1y':  { n: 365, gran: 'month', bars: 24, name: '12 months', chip: '12m', days: 760 },
+  };
+  let volView = (() => { try { return localStorage.getItem('sorion_vol_view') || '7d'; } catch { return '7d'; } })();
+  if (!VOL_VIEWS[volView]) volView = '7d';
+  function setVolView(v) {
+    if (!VOL_VIEWS[v]) return;
+    volView = v;
+    try { localStorage.setItem('sorion_vol_view', v); } catch {}
+    loadVolume();
+  }
+
   const vDay = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
   const vAdd = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
-  const vFmt = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const vFmt = d => {
+    const x = new Date(d + 'T12:00:00Z');
+    const o = { day: 'numeric', month: 'short' };
+    if (d.slice(0, 4) !== vDay().slice(0, 4)) o.year = 'numeric';   // Jahr nur, wenn nicht das laufende
+    return x.toLocaleDateString('en-GB', o);
+  };
+  const vWeekStart = d => vAdd(d, -((new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7));   // Montag
+  const vMonthStart = d => d.slice(0, 7) + '-01';
+  const vMonthEnd = d => { const x = new Date(vMonthStart(d) + 'T00:00:00Z'); x.setUTCMonth(x.getUTCMonth() + 1); x.setUTCDate(0); return x.toISOString().slice(0, 10); };
+  const vMonthAdd = (d, n) => { const x = new Date(vMonthStart(d) + 'T00:00:00Z'); x.setUTCMonth(x.getUTCMonth() + n); return x.toISOString().slice(0, 10); };
 
   async function loadVolume() {
     const box = document.getElementById('vol-strip');
     if (!box) return;
-    const elig = eligFilter;
-    const rows = await rpcCached('market_volume', { p_elig: elig, p_scarcity: 'all', p_days: 42 });
-    if (eligFilter !== elig) return;                  // Nutzer hat umgeschaltet
-    if (!Array.isArray(rows)) { box.hidden = true; return; }   // Funktion fehlt oder Fehler: lieber nichts
+    const elig = eligFilter, view = volView, cfg = VOL_VIEWS[view];
+    document.querySelectorAll('.vol-tab').forEach(b => b.classList.toggle('active', b.dataset.v === view));
+    const rows = await rpcCached('market_volume', { p_elig: elig, p_scarcity: 'all', p_days: cfg.days });
+    if (eligFilter !== elig || volView !== view) return;     // inzwischen umgeschaltet
+    if (!Array.isArray(rows)) { box.hidden = true; return; }  // Funktion fehlt oder Fehler: lieber nichts
     box.hidden = false;
 
     const label = elig === 'classic' ? 'Classic' : 'In-Season';
-    const lag = elig === 'classic' ? 8 : 2;           // Tag D ist ab D+lag vollstaendig
-    document.getElementById('vol-label').textContent = `// Trading Volume \u00b7 ${label} \u00b7 last 7 days`;
+    const lag = elig === 'classic' ? 8 : 2;                   // Tag D ist ab D+lag vollstaendig
+    const lastDone = vAdd(vDay(), -lag);                      // juengster vollstaendiger Tag
+    document.getElementById('vol-label').textContent = `// Trading Volume \u00b7 ${label} \u00b7 last ${cfg.name}`;
     const byDay = new Map(rows.map(r => [String(r.day).slice(0, 10), r]));
     const start = rows.length ? String(rows[0].start_day).slice(0, 10) : null;
-    const done = rows.filter(r => r.complete).map(r => String(r.day).slice(0, 10)).sort();
     const valEl = document.getElementById('vol-value'), chipEl = document.getElementById('vol-chip');
     const subEl = document.getElementById('vol-sub'), chartEl = document.getElementById('vol-chart');
 
@@ -1950,18 +1986,18 @@
       return { v, n, mv };
     };
 
-    // Kopfzahl: die letzten 7 KALENDERtage bis zum juengsten vollstaendigen Tag.
-    // (Nicht "die letzten 7 Zeilen": ein Tag ohne Daten wuerde sonst uebersprungen.)
-    const last = done.length ? done[done.length - 1] : null;
-    if (last && start && vAdd(last, -6) >= start) {
-      const cur = sumWin(vAdd(last, -6), last);
+    // ── Kopfzahl: N Kalendertage bis zum juengsten vollstaendigen Tag ────────
+    const N = cfg.n;
+    if (start && vAdd(lastDone, -(N - 1)) >= start) {
+      const from = vAdd(lastDone, -(N - 1));
+      const cur = sumWin(from, lastDone);
       valEl.textContent = fmtEurShort(cur.v);
-      subEl.textContent = `${cur.n.toLocaleString('en-GB')} sales \u00b7 ${cur.v > 0 ? Math.round(cur.mv / cur.v * 100) : 0}% manager-to-manager \u00b7 ${vFmt(vAdd(last, -6))} to ${vFmt(last)}`;
-      if (vAdd(last, -13) >= start) {
-        const prev = sumWin(vAdd(last, -13), vAdd(last, -7));
+      subEl.textContent = `${cur.n.toLocaleString('en-GB')} sales \u00b7 ${cur.v > 0 ? Math.round(cur.mv / cur.v * 100) : 0}% manager-to-manager \u00b7 ${vFmt(from)} to ${vFmt(lastDone)}`;
+      if (vAdd(lastDone, -(2 * N - 1)) >= start) {
+        const prev = sumWin(vAdd(lastDone, -(2 * N - 1)), vAdd(lastDone, -N));
         const pct = prev.v > 0 ? (cur.v / prev.v - 1) * 100 : null;
         const up = pct >= 0;
-        chipEl.innerHTML = pct == null ? '' : `<span title="Compared with the 7 days before" style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;background:${up ? 'rgba(0,245,160,0.14)' : 'rgba(255,45,120,0.14)'};border:1px solid ${up ? 'rgba(0,245,160,0.4)' : 'rgba(255,45,120,0.4)'};color:${up ? 'var(--up)' : 'var(--down)'}">${up ? '\u25b2 +' : '\u25bc '}${Math.abs(pct).toFixed(1)}% vs prior 7d</span>`;
+        chipEl.innerHTML = pct == null ? '' : `<span title="Compared with the ${cfg.name} before" style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;background:${up ? 'rgba(0,245,160,0.14)' : 'rgba(255,45,120,0.14)'};border:1px solid ${up ? 'rgba(0,245,160,0.4)' : 'rgba(255,45,120,0.4)'};color:${up ? 'var(--up)' : 'var(--down)'}">${up ? '\u25b2 +' : '\u25bc '}${Math.abs(pct).toFixed(1)}% vs prior ${cfg.chip}</span>`;
       } else {
         chipEl.innerHTML = '';
       }
@@ -1970,34 +2006,42 @@
       valEl.textContent = '\u2014';
       chipEl.innerHTML = '';
       subEl.textContent = start
-        ? `Collecting since ${vFmt(start)}. First 7-day total on ${vFmt(vAdd(start, 6 + lag))}, first comparison on ${vFmt(vAdd(start, 13 + lag))}.`
+        ? `Collecting since ${vFmt(start)}. First ${cfg.name} total on ${vFmt(vAdd(start, N - 1 + lag))}, first comparison on ${vFmt(vAdd(start, 2 * N - 1 + lag))}.`
         : 'Collection starts with the next market update.';
     }
 
-    // Balken: die letzten 28 Tage bis gestern, offene Tage schraffiert.
-    const to = vAdd(vDay(), -1), from = vAdd(to, -27);
-    const days = [];
-    for (let d = from; d <= to; d = vAdd(d, 1)) if (!start || d >= vAdd(start, -1)) days.push(d);
-    const shown = days.map(d => byDay.get(d)).filter(Boolean);
-    if (!shown.length) {
-      chartEl.innerHTML = '<div class="vol-empty">// daily bars appear here as data comes in</div>';
+    // ── Balken: Tage, Wochen oder Monate bis zum laufenden Zeitraum ──────────
+    const yesterday = vAdd(vDay(), -1);
+    const periods = [];
+    for (let i = cfg.bars - 1; i >= 0; i--) {
+      let ps, pe, name;
+      if (cfg.gran === 'day')       { ps = pe = vAdd(yesterday, -i); name = vFmt(ps); }
+      else if (cfg.gran === 'week') { ps = vAdd(vWeekStart(yesterday), -7 * i); pe = vAdd(ps, 6); name = 'Week of ' + vFmt(ps); }
+      else                          { ps = vMonthAdd(yesterday, -i); pe = vMonthEnd(ps);
+                                      name = new Date(ps + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }); }
+      // Zeitraeume vor Erhebungsbeginn weglassen; der Tag davor ist der (teilweise) erste Schreibtag
+      if (start && pe < vAdd(start, -1)) continue;
+      periods.push({ ps, pe, name });
+    }
+    const filled = periods.map(pr => ({ ...pr, ...sumWin(pr.ps, pr.pe), done: !!start && pr.ps >= start && pr.pe <= lastDone }));
+    if (!filled.some(pr => pr.v > 0)) {
+      chartEl.innerHTML = '<div class="vol-empty">// bars appear here as data comes in</div>';
       return;
     }
-    const max = Math.max(...shown.map(r => Number(r.volume)), 1);
-    const bars = days.map(d => {
-      const r = byDay.get(d);
-      if (!r) return `<div class="vol-bar" style="height:0" title="${vFmt(d)}: no data"></div>`;
-      const v = Number(r.volume), m = Number(r.mgr_volume);
-      const h = Math.max(2, Math.round(v / max * 100));
-      const mh = v > 0 ? Math.round(m / v * 100) : 0;
-      const tip = `${vFmt(d)}: ${fmtEurShort(v)} \u00b7 ${r.sales.toLocaleString('en-GB')} sales \u00b7 ${mh}% manager` + (r.complete ? '' : ' \u00b7 still being collected');
-      return `<div class="vol-bar${r.complete ? '' : ' open'}" style="height:${h}%" title="${tip}"><div class="mgr" style="height:${mh}%"></div></div>`;
+    const max = Math.max(...filled.map(pr => pr.v), 1);
+    const bars = filled.map(pr => {
+      if (!(pr.v > 0)) return `<div class="vol-bar" style="height:0" title="${pr.name}: no data"></div>`;
+      const h = Math.max(2, Math.round(pr.v / max * 100));
+      const mh = Math.round(pr.mv / pr.v * 100);
+      const why = pr.done ? '' : (start && pr.ps < start ? ` \u00b7 collection started ${vFmt(start)}` : ' \u00b7 still being collected');
+      const tip = `${pr.name}: ${fmtEurShort(pr.v)} \u00b7 ${pr.n.toLocaleString('en-GB')} sales \u00b7 ${mh}% manager${why}`;
+      return `<div class="vol-bar${pr.done ? '' : ' open'}" style="height:${h}%" title="${tip}"><div class="mgr" style="height:${mh}%"></div></div>`;
     }).join('');
     const legend = '<span class="vol-key" style="background:rgba(176,96,255,.32)"></span>all sales'
       + '<span class="vol-key" style="background:var(--purple)"></span>manager-to-manager'
-      + '<span class="vol-key" style="background:repeating-linear-gradient(45deg,rgba(176,96,255,.5) 0 2px,transparent 2px 4px)"></span>still being collected';
+      + '<span class="vol-key" style="background:repeating-linear-gradient(45deg,rgba(176,96,255,.5) 0 2px,transparent 2px 4px)"></span>incomplete';
     chartEl.innerHTML = `<div class="vol-bars">${bars}</div>`
-      + `<div class="vol-axis"><span>${vFmt(days[0])}</span><span>${legend}</span><span>${vFmt(days[days.length - 1])}</span></div>`;
+      + `<div class="vol-axis"><span>${filled[0].name}</span><span>${legend}</span><span>${filled[filled.length - 1].name}</span></div>`;
   }
 
   async function updateHeroStats() {
