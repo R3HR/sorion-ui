@@ -1259,6 +1259,19 @@
 
   /* ── Liga-Ranking (rechte Spalte) ─────────────────────────────── */
   .top-grid { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 14px; align-items: stretch; }
+  /* Marktvolumen: steht ueber allen anderen Kacheln (Jonas 13.11.), weil er den
+     ganzen Markt beschreibt und nicht einzelne Karten. */
+  .vol-strip { margin-bottom: 14px; display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: center; }
+  .vol-strip[hidden] { display: none; }
+  .vol-bars { display: flex; align-items: flex-end; gap: 3px; height: 64px; }
+  .vol-bar { flex: 1 1 0; min-width: 3px; position: relative; background: rgba(176,96,255,.32); border-radius: 2px 2px 0 0; }
+  .vol-bar .mgr { position: absolute; left: 0; right: 0; bottom: 0; background: var(--purple); border-radius: 2px 2px 0 0; }
+  .vol-bar.open { background: repeating-linear-gradient(45deg, rgba(176,96,255,.30) 0 3px, transparent 3px 6px); }
+  .vol-bar.open .mgr { opacity: .4; }
+  .vol-axis { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-family: 'Share Tech Mono', monospace; font-size: 10.5px; color: var(--text2); margin-top: 6px; }
+  .vol-key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: -1px; margin: 0 4px 0 10px; }
+  .vol-empty { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); line-height: 1.6; }
+  @media (max-width: 800px) { .vol-strip { grid-template-columns: 1fr; gap: 12px; } }
   @media (max-width: 1150px) { .top-grid { grid-template-columns: 1fr; } }
   .lr-wrap { position: relative; margin-bottom: 24px; }
   .lr-panel { position: absolute; inset: 0; background: var(--surface); border: 1px solid var(--border);
@@ -1368,6 +1381,19 @@
 </div>
 
 <div class="wrap">
+
+  <!-- Marktvolumen: ueber allen anderen Daten (Jonas 13.11.), beschreibt den ganzen Markt -->
+  <div class="hero-stat vol-strip" id="vol-strip" hidden>
+    <div>
+      <div class="hero-stat-label" id="vol-label">// Trading Volume · last 7 days</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="hero-stat-value" id="vol-value">—</div>
+        <span id="vol-chip"></span>
+      </div>
+      <div class="hero-stat-sub" id="vol-sub" style="margin-top:4px"></div>
+    </div>
+    <div id="vol-chart"></div>
+  </div>
 
   <div class="top-grid">
    <div class="top-main">
@@ -1887,8 +1913,96 @@
     }, 9000);
   }
 
+  // ── Marktvolumen (Streifen ganz oben) ────────────────────────────────────
+  // Quelle: market_volume_daily, vom Updater je Lauf geschrieben: ALLE neuen
+  // Verkaeufe, nicht die auf 5 je Lauf gekappten aus fmv_accuracy.
+  // Gerechnet wird nur mit VOLLSTAENDIGEN Tagen (Feld `complete`): Classic-Verkaeufe
+  // landen erst bis zu 7 Tage spaeter bei uns. Ohne diese Regel zeigte der rechte
+  // Rand jeder Kurve einen Einbruch, den es nicht gibt.
+  const vDay = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+  const vAdd = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const vFmt = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+  async function loadVolume() {
+    const box = document.getElementById('vol-strip');
+    if (!box) return;
+    const elig = eligFilter;
+    const rows = await rpcCached('market_volume', { p_elig: elig, p_scarcity: 'all', p_days: 42 });
+    if (eligFilter !== elig) return;                  // Nutzer hat umgeschaltet
+    if (!Array.isArray(rows)) { box.hidden = true; return; }   // Funktion fehlt oder Fehler: lieber nichts
+    box.hidden = false;
+
+    const label = elig === 'classic' ? 'Classic' : 'In-Season';
+    const lag = elig === 'classic' ? 8 : 2;           // Tag D ist ab D+lag vollstaendig
+    document.getElementById('vol-label').textContent = `// Trading Volume \u00b7 ${label} \u00b7 last 7 days`;
+    const byDay = new Map(rows.map(r => [String(r.day).slice(0, 10), r]));
+    const start = rows.length ? String(rows[0].start_day).slice(0, 10) : null;
+    const done = rows.filter(r => r.complete).map(r => String(r.day).slice(0, 10)).sort();
+    const valEl = document.getElementById('vol-value'), chipEl = document.getElementById('vol-chip');
+    const subEl = document.getElementById('vol-sub'), chartEl = document.getElementById('vol-chart');
+
+    const sumWin = (from, to) => {
+      let v = 0, n = 0, mv = 0;
+      for (let d = from; d <= to; d = vAdd(d, 1)) {
+        const r = byDay.get(d);
+        if (r) { v += Number(r.volume); n += r.sales; mv += Number(r.mgr_volume); }
+      }
+      return { v, n, mv };
+    };
+
+    // Kopfzahl: die letzten 7 KALENDERtage bis zum juengsten vollstaendigen Tag.
+    // (Nicht "die letzten 7 Zeilen": ein Tag ohne Daten wuerde sonst uebersprungen.)
+    const last = done.length ? done[done.length - 1] : null;
+    if (last && start && vAdd(last, -6) >= start) {
+      const cur = sumWin(vAdd(last, -6), last);
+      valEl.textContent = fmtEurShort(cur.v);
+      subEl.textContent = `${cur.n.toLocaleString('en-GB')} sales \u00b7 ${cur.v > 0 ? Math.round(cur.mv / cur.v * 100) : 0}% manager-to-manager \u00b7 ${vFmt(vAdd(last, -6))} to ${vFmt(last)}`;
+      if (vAdd(last, -13) >= start) {
+        const prev = sumWin(vAdd(last, -13), vAdd(last, -7));
+        const pct = prev.v > 0 ? (cur.v / prev.v - 1) * 100 : null;
+        const up = pct >= 0;
+        chipEl.innerHTML = pct == null ? '' : `<span title="Compared with the 7 days before" style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;background:${up ? 'rgba(0,245,160,0.14)' : 'rgba(255,45,120,0.14)'};border:1px solid ${up ? 'rgba(0,245,160,0.4)' : 'rgba(255,45,120,0.4)'};color:${up ? 'var(--up)' : 'var(--down)'}">${up ? '\u25b2 +' : '\u25bc '}${Math.abs(pct).toFixed(1)}% vs prior 7d</span>`;
+      } else {
+        chipEl.innerHTML = '';
+      }
+    } else {
+      // Erhebung laeuft erst: ehrlich sagen, ab wann es Zahlen gibt, statt Teilwerte zu zeigen.
+      valEl.textContent = '\u2014';
+      chipEl.innerHTML = '';
+      subEl.textContent = start
+        ? `Collecting since ${vFmt(start)}. First 7-day total on ${vFmt(vAdd(start, 6 + lag))}, first comparison on ${vFmt(vAdd(start, 13 + lag))}.`
+        : 'Collection starts with the next market update.';
+    }
+
+    // Balken: die letzten 28 Tage bis gestern, offene Tage schraffiert.
+    const to = vAdd(vDay(), -1), from = vAdd(to, -27);
+    const days = [];
+    for (let d = from; d <= to; d = vAdd(d, 1)) if (!start || d >= vAdd(start, -1)) days.push(d);
+    const shown = days.map(d => byDay.get(d)).filter(Boolean);
+    if (!shown.length) {
+      chartEl.innerHTML = '<div class="vol-empty">// daily bars appear here as data comes in</div>';
+      return;
+    }
+    const max = Math.max(...shown.map(r => Number(r.volume)), 1);
+    const bars = days.map(d => {
+      const r = byDay.get(d);
+      if (!r) return `<div class="vol-bar" style="height:0" title="${vFmt(d)}: no data"></div>`;
+      const v = Number(r.volume), m = Number(r.mgr_volume);
+      const h = Math.max(2, Math.round(v / max * 100));
+      const mh = v > 0 ? Math.round(m / v * 100) : 0;
+      const tip = `${vFmt(d)}: ${fmtEurShort(v)} \u00b7 ${r.sales.toLocaleString('en-GB')} sales \u00b7 ${mh}% manager` + (r.complete ? '' : ' \u00b7 still being collected');
+      return `<div class="vol-bar${r.complete ? '' : ' open'}" style="height:${h}%" title="${tip}"><div class="mgr" style="height:${mh}%"></div></div>`;
+    }).join('');
+    const legend = '<span class="vol-key" style="background:rgba(176,96,255,.32)"></span>all sales'
+      + '<span class="vol-key" style="background:var(--purple)"></span>manager-to-manager'
+      + '<span class="vol-key" style="background:repeating-linear-gradient(45deg,rgba(176,96,255,.5) 0 2px,transparent 2px 4px)"></span>still being collected';
+    chartEl.innerHTML = `<div class="vol-bars">${bars}</div>`
+      + `<div class="vol-axis"><span>${vFmt(days[0])}</span><span>${legend}</span><span>${vFmt(days[days.length - 1])}</span></div>`;
+  }
+
   async function updateHeroStats() {
     const elig = eligFilter;
+    loadVolume();
     rpcCached('market_overview', { p_elig: elig }).then(ov => {
       if (!ov || eligFilter !== elig) return;
       const get = sc => ov.find(x => x.scarcity === sc);
