@@ -1938,8 +1938,8 @@
   // mit dem Zeitraum davor immer gleich lange Strecken gegenueberstellt.
   const VOL_VIEWS = {
     '7d':  { n: 7,   gran: 'day',   bars: 28, name: '7 days',    chip: '7d',  days: 42  },
-    '30d': { n: 30,  gran: 'week',  bars: 26, name: '30 days',   chip: '30d', days: 200 },
-    '1y':  { n: 365, gran: 'month', bars: 24, name: '12 months', chip: '12m', days: 760 },
+    '30d': { n: 30,  gran: 'mday',  bars: 40, name: 'month',     chip: 'mtd', days: 80, mtd: true },
+    '1y':  { n: 365, gran: 'month', bars: 12, name: '12 months', chip: '12m', days: 760 },
   };
   let volView = (() => { try { return localStorage.getItem('sorion_vol_view') || '7d'; } catch { return '7d'; } })();
   if (!VOL_VIEWS[volView]) volView = '7d';
@@ -1991,9 +1991,43 @@
       return { v, n, mv };
     };
 
-    // ── Kopfzahl: N Kalendertage bis zum juengsten vollstaendigen Tag ────────
+    // ── Kopfzahl ─────────────────────────────────────────────────────────────
+    // 30D (Jonas 13.11.): der Monat des juengsten vollstaendigen Tags, vom 1. bis zu
+    // diesem Tag, verglichen mit DENSELBEN Tagen des Vormonats (gleich viele Tage).
+    // Frueh im Monat ist das noch der Vormonat (Classic: bis zum 8.), dann steht
+    // dessen Name da. Balken und Kopfzahl beschreiben so dieselben Tage.
     const N = cfg.n;
-    if (start && vAdd(lastDone, -(N - 1)) >= start) {
+    const monthName = (d, len) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { month: len });
+    if (cfg.mtd) {
+      const ms = vMonthStart(lastDone);
+      const isCurrent = ms === vMonthStart(vDay());
+      document.getElementById('vol-label').textContent =
+        `// Trading Volume · ${label} · ${monthName(ms, 'long')}${isCurrent ? ' so far' : ''}`;
+      if (start && ms >= start) {
+        const k = Math.round((Date.parse(lastDone) - Date.parse(ms)) / 86400000) + 1;
+        const cur = sumWin(ms, lastDone);
+        valEl.textContent = fmtEurShort(cur.v);
+        subEl.textContent = `${cur.n.toLocaleString('en-GB')} sales · ${cur.v > 0 ? Math.round(cur.mv / cur.v * 100) : 0}% manager-to-manager · ${vFmt(ms)} to ${vFmt(lastDone)}`;
+        const ps = vMonthAdd(ms, -1);
+        const pe = [vAdd(ps, k - 1), vMonthEnd(ps)].sort()[0];      // Vormonat kann kuerzer sein
+        if (ps >= start) {
+          const prev = sumWin(ps, pe);
+          const pct = prev.v > 0 ? (cur.v / prev.v - 1) * 100 : null;
+          const up = pct >= 0;
+          chipEl.innerHTML = pct == null ? '' : `<span title="Compared with ${vFmt(ps)} to ${vFmt(pe)}" style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;background:${up ? 'rgba(0,245,160,0.14)' : 'rgba(255,45,120,0.14)'};border:1px solid ${up ? 'rgba(0,245,160,0.4)' : 'rgba(255,45,120,0.4)'};color:${up ? 'var(--up)' : 'var(--down)'}">${up ? '\u25b2 +' : '\u25bc '}${Math.abs(pct).toFixed(1)}% vs same days in ${monthName(ps, 'short')}</span>`;
+        } else {
+          chipEl.innerHTML = '';
+        }
+      } else {
+        // Erster voller Monat = der erste, der am 1. schon erfasst wurde.
+        const fm = start ? (start.slice(8) === '01' ? start : vMonthAdd(start, 1)) : null;
+        valEl.textContent = '\u2014';
+        chipEl.innerHTML = '';
+        subEl.textContent = fm
+          ? `Collecting since ${vFmt(start)}. First monthly figure on ${vFmt(vAdd(fm, lag))}, first comparison on ${vFmt(vAdd(vMonthAdd(fm, 1), lag))}.`
+          : 'Collection starts with the next market update.';
+      }
+    } else if (start && vAdd(lastDone, -(N - 1)) >= start) {
       const from = vAdd(lastDone, -(N - 1));
       const cur = sumWin(from, lastDone);
       valEl.textContent = fmtEurShort(cur.v);
@@ -2019,9 +2053,17 @@
     // Der laufende Zeitraum ist immer dabei (schraffiert), damit man sieht, dass
     // gezaehlt wird. Erste Fassung endete bei gestern und warf alles vor dem
     // Erhebungsbeginn weg: am ersten Tag blieb so kein einziger Balken (Jonas 13.11.).
+    // 30D zeigt die Tage des LAUFENDEN Kalendermonats, 1Y die letzten 12 Monate
+    // (Jonas 13.11.). Die Kopfzahl bleibt rollierend (30 bzw. 365 Tage), damit der
+    // Vergleich mit dem Zeitraum davor gleich lange Strecken gegenueberstellt.
     const todayB = vDay();
     const periods = [];
-    for (let i = cfg.bars - 1; i >= 0; i--) {
+    if (cfg.gran === 'mday') {
+      // ab dem 1. des Monats, den die Kopfzahl beschreibt (frueh im Monat ist das der
+      // Vormonat), bis heute
+      for (let d = vMonthStart(lastDone); d <= todayB; d = vAdd(d, 1)) periods.push({ ps: d, pe: d, name: vFmt(d) });
+    }
+    for (let i = cfg.gran === 'mday' ? -1 : cfg.bars - 1; i >= 0; i--) {
       let ps, pe, name;
       if (cfg.gran === 'day')       { ps = pe = vAdd(todayB, -i); name = vFmt(ps); }
       else if (cfg.gran === 'week') { ps = vAdd(vWeekStart(todayB), -7 * i); pe = vAdd(ps, 6); name = 'Week of ' + vFmt(ps); }
