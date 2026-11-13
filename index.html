@@ -286,6 +286,10 @@
     opacity: 0;
     transition: opacity 0.3s;
   }
+  /* Schmuck-Ebenen duerfen keine Klicks fangen: die ::after-Ebene liegt ueber der
+     ganzen Kachel und schluckte im Volumen-Streifen jeden Klick auf 7D/30D/1Y
+     (13.11.). Bis dahin hatte keine Kachel Knoepfe, deshalb fiel es nie auf. */
+  .hero-stat::before, .hero-stat::after { pointer-events: none; }
 
   .hero-stat:hover {
     border-color: var(--purple2);
