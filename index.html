@@ -2650,6 +2650,7 @@
         <td class="fmv-price">${fmv}</td>
         <td class="price col-floor">${floor}</td>
         <td class="price">${last}${r.last_sale_at ? `<div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:${saleAgeColor(r.last_sale_at)};margin-top:2px" title="${new Date(r.last_sale_at).toLocaleString('en-GB')}">${saleAge(r.last_sale_at)}</div>` : ''}</td>
+        <td class="price">${avg}</td>
         <td class="price col-mcap">${mcap == null ? '—' : fmtEurShort(mcap)}</td>
         <td class="price col-vol">${vol == null ? '—'
           : `${fmtEurShort(vol.sum)}${vol.capped ? '+' : ''}<div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">(${fmtEurShort(vol.sum / 7)}/d)</div>`}</td>
