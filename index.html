@@ -949,7 +949,7 @@
   }
 
   @media (max-width: 800px) { .hero-stats { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 900px)  { .col-7d, .col-supply, .col-tier, .col-24h { display: none; } }
+  @media (max-width: 900px)  { .col-7d, .col-supply, .col-tier, .col-24h, .col-vol { display: none; } }
 
   @media (max-width: 600px) {
     .wrap { padding: 0 12px 60px; }
@@ -1001,7 +1001,7 @@
     .rng-track { flex: 1; width: auto; }
 
     /* Table — hide more columns */
-    .col-floor, .col-liq, .col-7d2 { display: none; }
+    .col-floor, .col-liq, .col-7d2, .col-mcap { display: none; }
 
     thead th { font-size: 10px; padding: 10px 8px; letter-spacing: 0.06em; }
     tbody td { padding: 10px 10px; font-size: 12px; }
@@ -1534,6 +1534,8 @@
           <th onclick="sortBy('floor_price')" class="col-floor">Floor</th>
           <th onclick="sortBy('sale_1')">Last Sale</th>
           <th onclick="sortBy('avg_sales')">Avg Sales</th>
+          <th class="col-mcap" title="Minted supply x FMV">Market Cap</th>
+          <th class="col-vol" title="Manager-to-manager volume, last 7 days. In brackets: per day.">Volume (7d)</th>
           <th class="col-liq" onclick="sortBy('sales_count')">Liquidity</th>
           <th class="col-supply col-7d">30d Trend</th>
         </tr>
@@ -1599,6 +1601,38 @@
   const facetsCache = {}, leaguesCache = {}, moversCache = {};
   let moverRows = [];   // aktuell angezeigte Top/Flop-Zeilen, fuer openModal per Index
   const H_API = { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY };
+
+  // Marktkapitalisierung: Stueckzahl mal FMV. `supply` ist die TATSAECHLICH
+  // gepraegte Zahl dieser Saison/Rarity, nicht die Maximalauflage.
+  function marketCap(r) {
+    const n = Number(r.supply), v = Number(r.fmv);
+    return (n > 0 && v > 0) ? n * v : null;
+  }
+
+  // Umsatz der letzten 7 Tage aus den gespeicherten Manager-Verkaeufen.
+  // Bewusst nur Manager-Verkaeufe: Auktion und Sofortkauf sind Sorares eigene
+  // Maerkte und durch Gutscheine verzerrt, dieselbe Grundlage wie beim FMV.
+  // Grenze: gespeichert sind die letzten 10 Verkaeufe. Bei rund 7 % der
+  // Limited-Karten liegen alle 10 im Fenster, dort ist die Summe eine
+  // Untergrenze (bei rare und super_rare praktisch nie).
+  function volume7d(r) {
+    const list = r.manager_sales;
+    if (!Array.isArray(list) || !list.length) return null;
+    const cut = Date.now() - 7 * 86400000;
+    let sum = 0, n = 0, capped = list.length >= 10;
+    for (const e of list) {
+      const t = Date.parse(e?.date);
+      if (!(t > cut)) { capped = false; continue; }   // aeltester Eintrag ausserhalb -> nicht abgeschnitten
+      const v = Number(e?.eur);
+      if (v > 0) { sum += v; n++; }
+    }
+    return n ? { sum, n, capped: capped && n >= 10 } : null;
+  }
+
+  const fmtEurShort = v => v == null ? '—'
+    : v >= 1e6 ? '€' + (v / 1e6).toFixed(2) + 'M'
+    : v >= 1e3 ? '€' + (v / 1e3).toFixed(1) + 'k'
+    : '€' + v.toFixed(0);
 
   const COLS = 'id,player_slug,player_name,team_name,league_name,league_country,picture_url,scarcity,eligibility,tier,fmv,floor_price,sale_1,sale_2,sale_3,sale_4,sale_5,avg_sales,sales_count,change_24h,change_7d,available_supply,supply,manager_sales,avg_manager_sales,position,last_sale_at,updated_at';
 
@@ -2599,6 +2633,8 @@
       const cnt      = r.sales_count || 0; // sales in last 24h
       const liqClass = cnt >= 3 ? 'liq-high' : cnt >= 1 ? 'liq-medium' : 'liq-low';
       const liqLabel = cnt >= 3 ? 'High' : cnt >= 1 ? 'Med' : 'Low';
+      const mcap     = marketCap(r);
+      const vol      = volume7d(r);
       return `<tr onclick="openModal(rows[${i}])" style="cursor:pointer">
         <td><span class="rank-num">${String(rank).padStart(2,'0')}</span></td>
         <td><div class="player-cell">
@@ -2614,7 +2650,9 @@
         <td class="fmv-price">${fmv}</td>
         <td class="price col-floor">${floor}</td>
         <td class="price">${last}${r.last_sale_at ? `<div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:${saleAgeColor(r.last_sale_at)};margin-top:2px" title="${new Date(r.last_sale_at).toLocaleString('en-GB')}">${saleAge(r.last_sale_at)}</div>` : ''}</td>
-        <td class="price">${avg}</td>
+        <td class="price col-mcap">${mcap == null ? '—' : fmtEurShort(mcap)}</td>
+        <td class="price col-vol">${vol == null ? '—'
+          : `${fmtEurShort(vol.sum)}${vol.capped ? '+' : ''}<div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">(${fmtEurShort(vol.sum / 7)}/d)</div>`}</td>
         <td class="col-liq">
           <div class="liq-wrap">
             <div class="liq ${liqClass}"><div class="liq-dot"></div>${liqLabel} (${cnt})</div>
@@ -2805,6 +2843,8 @@
         <td class="col-floor"><span class="skeleton" style="width:48px"></span></td>
         <td><span class="skeleton" style="width:48px"></span></td>
         <td><span class="skeleton" style="width:48px"></span></td>
+        <td class="col-mcap"><span class="skeleton" style="width:54px"></span></td>
+        <td class="col-vol"><span class="skeleton" style="width:54px"></span></td>
         <td class="col-liq"><span class="skeleton" style="width:60px"></span></td>
         <td class="col-supply col-7d"><span class="skeleton" style="width:70px;height:20px"></span></td>
       </tr>`
