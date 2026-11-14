@@ -1278,6 +1278,10 @@
   .vol-bar { width: 100%; max-width: 56px; position: relative; background: rgba(176,96,255,.38); border-radius: 3px 3px 0 0; transition: background .15s; }
   .vol-col:hover .vol-bar { background: rgba(176,96,255,.6); }
   .vol-bar .mgr { position: absolute; left: 0; right: 0; bottom: 0; background: var(--purple); border-radius: 3px 3px 0 0; }
+  /* gestapelt nach Seltenheit: Segmente fuellen den Balken von oben nach unten */
+  .vol-stack { display: flex; flex-direction: column; overflow: hidden; background: transparent; }
+  .vol-stack > div { width: 100%; flex: none; }
+  .vol-col:hover .vol-stack { background: transparent; filter: brightness(1.15); }
   .vol-val { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-bottom: 3px; white-space: nowrap; }
   .vol-lbl { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 4px; white-space: nowrap; overflow: visible; }   /* darf in leere Nachbarspalten ragen */
   .vol-legend { font-family: 'Share Tech Mono', monospace; font-size: 12.5px; color: var(--text2); margin-top: 8px; text-align: right; }
@@ -1951,6 +1955,12 @@
     '30d': { n: 30,  name: '30 days',   chip: '30d', days: 70,  jobs: ['recent'] },
     '1y':  { n: 365, name: '12 months', chip: null,  days: 400, jobs: ['recent', 'year'], monthly: true },
   };
+  // Farben wie ueberall auf der Seite. Reihenfolge = von unten nach oben im Balken.
+  const VOL_RARITIES = [
+    { key: 'limited',    name: 'Limited',    color: 'var(--limited)' },
+    { key: 'rare',       name: 'Rare',       color: 'var(--rare)' },
+    { key: 'super_rare', name: 'Super Rare', color: 'var(--sr)' },
+  ];
   let volView = (() => { try { return localStorage.getItem('sorion_vol_view') || '7d'; } catch { return '7d'; } })();
   if (!VOL_VIEWS[volView]) volView = '7d';
   function setVolView(v) {
@@ -1981,12 +1991,27 @@
     if (!box) return;
     const elig = eligFilter, view = volView, cfg = VOL_VIEWS[view];
     document.querySelectorAll('.vol-tab').forEach(b => b.classList.toggle('active', b.dataset.v === view));
-    const [rows, prog] = await Promise.all([
-      rpcCached('market_volume', { p_elig: elig, p_scarcity: 'all', p_days: cfg.days }),
+    // Je Seltenheit eine Abfrage (Jonas 14.11.: Anteile farbig in jedem Balken). Drei kleine
+    // Antworten statt einer; die Gesamtsumme ergibt sich daraus.
+    const [rl, rr, rs, prog] = await Promise.all([
+      ...VOL_RARITIES.map(r => rpcCached('market_volume', { p_elig: elig, p_scarcity: r.key, p_days: cfg.days })),
       rpc('market_volume_progress', {}).catch(() => null),
     ]);
     if (eligFilter !== elig || volView !== view) return;      // inzwischen umgeschaltet
-    if (!Array.isArray(rows)) { box.hidden = true; return; }  // Funktion fehlt oder Fehler: lieber nichts
+    if (![rl, rr, rs].every(Array.isArray)) { box.hidden = true; return; }   // Funktion fehlt oder Fehler: lieber nichts
+    const merged = new Map();
+    [rl, rr, rs].forEach((list, i) => {
+      const key = VOL_RARITIES[i].key;
+      for (const r of list) {
+        const d = String(r.day).slice(0, 10);
+        const m = merged.get(d) ?? { day: d, sales: 0, volume: 0, mgr_volume: 0, complete: false, sc: {} };
+        m.sales += r.sales; m.volume += Number(r.volume); m.mgr_volume += Number(r.mgr_volume);
+        m.sc[key] = (m.sc[key] ?? 0) + Number(r.volume);
+        m.complete = m.complete || r.complete;
+        merged.set(d, m);
+      }
+    });
+    const rows = [...merged.values()];
     box.hidden = false;
 
     const label = elig === 'classic' ? 'Classic' : 'In-Season';
@@ -2033,13 +2058,17 @@
 
     // ── Kopfzahl: Summe genau des angezeigten Zeitraums ─────────────────────
     const sumWin = (a, b) => {
-      let v = 0, n = 0, mv = 0;
+      let v = 0, n = 0, mv = 0; const sc = {};
       for (let d = a; d <= b; d = vAdd(d, 1)) {
         const r = byDay.get(d);
-        if (r) { v += Number(r.volume); n += r.sales; mv += Number(r.mgr_volume); }
+        if (r) {
+          v += Number(r.volume); n += r.sales; mv += Number(r.mgr_volume);
+          for (const k in r.sc) sc[k] = (sc[k] ?? 0) + r.sc[k];
+        }
       }
-      return { v, n, mv };
+      return { v, n, mv, sc };
     };
+    const shares = w => VOL_RARITIES.map(r => `${r.name} ${w.v > 0 ? Math.round((w.sc[r.key] ?? 0) / w.v * 100) : 0}%`).join(', ');
     const cur = sumWin(from, lastDone);
     valEl.textContent = fmtEurShort(cur.v);
     subEl.textContent = `${cur.n.toLocaleString('en-GB')} sales \u00b7 ${cur.v > 0 ? Math.round(cur.mv / cur.v * 100) : 0}% manager-to-manager \u00b7 ${vFmt(from)} to ${vFmt(lastDone)}`;
@@ -2060,9 +2089,9 @@
         const mname = vDate(ms).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
         const part = (a !== ms || b !== me) ? ` (${vFmt(a)} to ${vFmt(b)})` : '';
         cols.push({
-          v: w.v / k, mv: w.mv / k,
+          v: w.v / k, mv: w.mv / k, sc: w.sc, tot: w.v,
           lbl: vDate(ms).toLocaleDateString('en-GB', { month: 'short' }) + (ms.slice(5, 7) === '01' || ms === vMonthStart(from) ? ' ' + ms.slice(2, 4) : ''),
-          tip: `${mname}${part}: ${fmtEurShort(w.v)} in total, ${fmtEurShort(w.v / k)} per day, ${w.n.toLocaleString('en-GB')} sales`,
+          tip: `${mname}${part}: ${fmtEurShort(w.v)} in total, ${fmtEurShort(w.v / k)} per day, ${w.n.toLocaleString('en-GB')} sales. ${shares(w)}`,
         });
       }
     } else {
@@ -2072,8 +2101,8 @@
           ? dt.toLocaleDateString('en-GB', { weekday: 'short' }) + ' ' + dt.getUTCDate()
           : (dt.getUTCDate() % 5 === 0 ? String(dt.getUTCDate()) : '');   // 30 Balken: jeder 5. Tag
         cols.push({
-          v: w.v, mv: w.mv, lbl,
-          tip: `${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}: ${fmtEurShort(w.v)}, ${w.n.toLocaleString('en-GB')} sales, ${w.v > 0 ? Math.round(w.mv / w.v * 100) : 0}% manager-to-manager`,
+          v: w.v, mv: w.mv, lbl, sc: w.sc, tot: w.v,
+          tip: `${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}: ${fmtEurShort(w.v)}, ${w.n.toLocaleString('en-GB')} sales. ${shares(w)}`,
         });
       }
     }
@@ -2084,16 +2113,20 @@
     if (cfg.monthly && colW < 44) cols.forEach((c, i) => { if ((cols.length - 1 - i) % 2) c.lbl = ''; });
     const html = cols.map(c => {
       const h = Math.max(1, Math.round(c.v / max * 100));
-      const mh = c.v > 0 ? Math.round(c.mv / c.v * 100) : 0;
+      // Segmente von unten nach oben: Limited, Rare, Super Rare, je nach Anteil am Tag/Monat
+      const segs = VOL_RARITIES.map(r => {
+        const part = c.tot > 0 ? (c.sc[r.key] ?? 0) / c.tot * 100 : 0;
+        return part > 0 ? `<div style="height:${part.toFixed(2)}%;background:${r.color}"></div>` : '';
+      }).reverse().join('');
       return `<div class="vol-col" title="${c.tip}">`
         + (showVals ? `<div class="vol-val">${fmtEurShort(c.v)}</div>` : '')
-        + `<div class="vol-area"><div class="vol-bar" style="height:${h}%"><div class="mgr" style="height:${mh}%"></div></div></div>`
+        + `<div class="vol-area"><div class="vol-bar vol-stack" style="height:${h}%">${segs}</div></div>`
         + `<div class="vol-lbl">${c.lbl}</div></div>`;
     }).join('');
     const scale = cfg.monthly ? `// average per day \u00b7 highest ${fmtEurShort(max)}` : `// per day \u00b7 highest ${fmtEurShort(max)}`;
     chartEl.innerHTML = `<div class="vol-chart"><div class="vol-scale">${scale}</div><div class="vol-cols">${html}</div>`
-      + `<div class="vol-legend"><span class="vol-key" style="background:rgba(176,96,255,.38)"></span>all sales`
-      + `<span class="vol-key" style="background:var(--purple)"></span>manager-to-manager</div></div>`;
+      + `<div class="vol-legend">${VOL_RARITIES.map(r =>
+          `<span class="vol-key" style="background:${r.color}"></span>${r.name} ${cur.v > 0 ? Math.round((cur.sc[r.key] ?? 0) / cur.v * 100) : 0}%`).join('')}</div></div>`;
   }
 
   async function updateHeroStats() {
