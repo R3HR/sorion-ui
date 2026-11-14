@@ -1271,20 +1271,20 @@
   .vol-tab { padding: 4px 11px; font-size: 10.5px; }
   /* Balken: jede Spalte = Balkenflaeche + Beschriftung. Keine Teildaten mehr. */
   .vol-chart { position: relative; }
-  .vol-scale { font-family: 'Share Tech Mono', monospace; font-size: 10.5px; color: var(--text2); margin-bottom: 4px; }
+  .vol-scale { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-bottom: 4px; }
   .vol-cols { display: flex; gap: 4px; align-items: flex-end; }
   .vol-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; cursor: default; }
   .vol-area { height: 120px; width: 100%; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--border); }
   .vol-bar { width: 100%; max-width: 56px; position: relative; background: rgba(176,96,255,.38); border-radius: 3px 3px 0 0; transition: background .15s; }
   .vol-col:hover .vol-bar { background: rgba(176,96,255,.6); }
   .vol-bar .mgr { position: absolute; left: 0; right: 0; bottom: 0; background: var(--purple); border-radius: 3px 3px 0 0; }
-  .vol-val { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text2); margin-bottom: 3px; white-space: nowrap; }
-  .vol-lbl { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text2); margin-top: 4px; white-space: nowrap; overflow: hidden; max-width: 100%; }
-  .vol-legend { font-family: 'Share Tech Mono', monospace; font-size: 10.5px; color: var(--text2); margin-top: 8px; text-align: right; }
-  .vol-key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: -1px; margin: 0 4px 0 12px; }
+  .vol-val { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-bottom: 3px; white-space: nowrap; }
+  .vol-lbl { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 4px; white-space: nowrap; overflow: visible; }   /* darf in leere Nachbarspalten ragen */
+  .vol-legend { font-family: 'Share Tech Mono', monospace; font-size: 12.5px; color: var(--text2); margin-top: 8px; text-align: right; }
+  .vol-key { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin: 0 4px 0 12px; }
   .vol-prog { height: 8px; background: rgba(176,96,255,.15); border-radius: 4px; overflow: hidden; margin: 6px 0 8px; }
   .vol-prog > div { height: 100%; background: var(--purple); border-radius: 4px; }
-  .vol-empty { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); line-height: 1.6; }
+  .vol-empty { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); line-height: 1.6; }
   @media (max-width: 800px) { .vol-strip { grid-template-columns: 1fr; gap: 12px; } }
   @media (max-width: 1150px) { .top-grid { grid-template-columns: 1fr; } }
   .lr-wrap { position: relative; margin-bottom: 24px; }
@@ -1399,12 +1399,12 @@
   <!-- Marktvolumen: ueber allen anderen Daten (Jonas 13.11.), beschreibt den ganzen Markt -->
   <div class="hero-stat vol-strip" id="vol-strip" hidden>
     <div>
-      <div class="hero-stat-label" id="vol-label">// Trading Volume · last 7 days</div>
+      <div class="hero-stat-label" id="vol-label" style="font-size:13px">// Trading Volume · last 7 days</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="hero-stat-value" id="vol-value">—</div>
         <span id="vol-chip"></span>
       </div>
-      <div class="hero-stat-sub" id="vol-sub" style="margin-top:4px"></div>
+      <div class="hero-stat-sub" id="vol-sub" style="margin-top:6px;font-size:13px;line-height:1.5"></div>
     </div>
     <div>
       <div class="vol-tabs">
@@ -1973,7 +1973,7 @@
   function volChip(pct, title) {
     if (pct == null || !isFinite(pct)) return '';
     const up = pct >= 0;
-    return `<span title="${title}" style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;background:${up ? 'rgba(0,245,160,0.14)' : 'rgba(255,45,120,0.14)'};border:1px solid ${up ? 'rgba(0,245,160,0.4)' : 'rgba(255,45,120,0.4)'};color:${up ? 'var(--up)' : 'var(--down)'}">${up ? '\u25b2 +' : '\u25bc '}${Math.abs(pct).toFixed(1)}%</span>`;
+    return `<span title="${title}" style="font-family:'Share Tech Mono',monospace;font-size:14px;font-weight:700;padding:3px 9px;border-radius:5px;white-space:nowrap;background:${up ? 'rgba(0,245,160,0.14)' : 'rgba(255,45,120,0.14)'};border:1px solid ${up ? 'rgba(0,245,160,0.4)' : 'rgba(255,45,120,0.4)'};color:${up ? 'var(--up)' : 'var(--down)'}">${up ? '\u25b2 +' : '\u25bc '}${Math.abs(pct).toFixed(1)}%</span>`;
   }
 
   async function loadVolume() {
@@ -2046,7 +2046,7 @@
     const pFrom = vAdd(from, -cfg.n), pTo = vAdd(from, -1);
     if (cfg.chip && pFrom >= start) {
       const prev = sumWin(pFrom, pTo);
-      chipEl.innerHTML = prev.v > 0 ? volChip((cur.v / prev.v - 1) * 100, `Compared with ${vFmt(pFrom)} to ${vFmt(pTo)}`) + `<span style="font-family:'Share Tech Mono',monospace;font-size:10.5px;color:var(--text2);margin-left:6px">vs prior ${cfg.chip}</span>` : '';
+      chipEl.innerHTML = prev.v > 0 ? volChip((cur.v / prev.v - 1) * 100, `Compared with ${vFmt(pFrom)} to ${vFmt(pTo)}`) + `<span style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);margin-left:6px">vs prior ${cfg.chip}</span>` : '';
     } else {
       chipEl.innerHTML = '';
     }
@@ -2078,7 +2078,10 @@
       }
     }
     const max = Math.max(...cols.map(c => c.v), 1);
-    const showVals = cols.length <= 13;          // bei 30 Balken waere es unleserlich: dann per Mauszeiger
+    const colW = (chartEl.clientWidth || 700) / cols.length;
+    const showVals = colW >= 56;                 // groessere Schrift braucht Platz; sonst per Mauszeiger
+    // Schmale Spalten (Handy): Monatsnamen nur jeden zweiten Monat, sonst stossen sie aneinander
+    if (cfg.monthly && colW < 44) cols.forEach((c, i) => { if ((cols.length - 1 - i) % 2) c.lbl = ''; });
     const html = cols.map(c => {
       const h = Math.max(1, Math.round(c.v / max * 100));
       const mh = c.v > 0 ? Math.round(c.mv / c.v * 100) : 0;
