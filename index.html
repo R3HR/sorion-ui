@@ -1283,7 +1283,8 @@
   .vol-stack > div { width: 100%; flex: none; }
   .vol-col:hover .vol-stack { background: transparent; filter: brightness(1.15); }
   .vol-val { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-bottom: 3px; white-space: nowrap; }
-  .vol-lbl { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 4px; white-space: nowrap; overflow: visible; }   /* darf in leere Nachbarspalten ragen */
+  .vol-lbl { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 4px; white-space: nowrap; overflow: visible; min-height: 1.35em; line-height: 1.35em; }   /* feste Hoehe: ein leeres Feld verschiebt keinen Balken */
+  .vol-ends { display: flex; justify-content: space-between; font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 5px; }
   .vol-legend { font-family: 'Share Tech Mono', monospace; font-size: 12.5px; color: var(--text2); margin-top: 8px; text-align: right; }
   .vol-key { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin: 0 4px 0 12px; }
   .vol-prog { height: 8px; background: rgba(176,96,255,.15); border-radius: 4px; overflow: hidden; margin: 6px 0 8px; }
@@ -2099,7 +2100,7 @@
         const w = sumWin(d, d), dt = vDate(d);
         const lbl = cfg.n <= 7
           ? dt.toLocaleDateString('en-GB', { weekday: 'short' }) + ' ' + dt.getUTCDate()
-          : (dt.getUTCDate() % 5 === 0 ? String(dt.getUTCDate()) : '');   // 30 Balken: jeder 5. Tag
+          : '';   // 30D: keine Zahlen unter den Balken, nur Anfangs- und Enddatum (Jonas 14.11.)
         cols.push({
           v: w.v, mv: w.mv, lbl, sc: w.sc, tot: w.v,
           tip: `${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}: ${fmtEurShort(w.v)}, ${w.n.toLocaleString('en-GB')} sales. ${shares(w)}`,
@@ -2111,6 +2112,7 @@
     const showVals = colW >= 56;                 // groessere Schrift braucht Platz; sonst per Mauszeiger
     // Schmale Spalten (Handy): Monatsnamen nur jeden zweiten Monat, sonst stossen sie aneinander
     if (cfg.monthly && colW < 44) cols.forEach((c, i) => { if ((cols.length - 1 - i) % 2) c.lbl = ''; });
+    const hasLbl = cols.some(c => c.lbl);
     const html = cols.map(c => {
       const h = Math.max(1, Math.round(c.v / max * 100));
       // Segmente von unten nach oben: Limited, Rare, Super Rare, je nach Anteil am Tag/Monat
@@ -2121,10 +2123,12 @@
       return `<div class="vol-col" title="${c.tip}">`
         + (showVals ? `<div class="vol-val">${fmtEurShort(c.v)}</div>` : '')
         + `<div class="vol-area"><div class="vol-bar vol-stack" style="height:${h}%">${segs}</div></div>`
-        + `<div class="vol-lbl">${c.lbl}</div></div>`;
+        + (hasLbl ? `<div class="vol-lbl">${c.lbl}</div>` : '') + `</div>`;
     }).join('');
     const scale = cfg.monthly ? `// average per day \u00b7 highest ${fmtEurShort(max)}` : `// per day \u00b7 highest ${fmtEurShort(max)}`;
-    chartEl.innerHTML = `<div class="vol-chart"><div class="vol-scale">${scale}</div><div class="vol-cols">${html}</div>`
+    // Ohne Spaltenbeschriftung (30D): Anfangs- und Enddatum mit Monatsnamen unter dem Diagramm
+    const ends = hasLbl ? '' : `<div class="vol-ends"><span>${vFmt(from)}</span><span>${vFmt(lastDone)}</span></div>`;
+    chartEl.innerHTML = `<div class="vol-chart"><div class="vol-scale">${scale}</div><div class="vol-cols">${html}</div>${ends}`
       + `<div class="vol-legend">${VOL_RARITIES.map(r =>
           `<span class="vol-key" style="background:${r.color}"></span>${r.name} ${cur.v > 0 ? Math.round((cur.sc[r.key] ?? 0) / cur.v * 100) : 0}%`).join('')}</div></div>`;
   }
